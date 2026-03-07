@@ -1,0 +1,29 @@
+[project]
+name = "vllm-benchmark"
+version = "0.1.0"
+description = "A/B benchmark for MLA attention + quant fusion"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # vllm build-system requirements (from pyproject.toml)
+    "cmake>=3.26.1",
+    "ninja",
+    "packaging>=24.2",
+    "setuptools>=77.0.3,<81.0.0",
+    "setuptools-scm>=8.0",
+    "wheel",
+    "jinja2",
+    # runtime deps needed before vllm install
+    "numpy",
+    "pip",
+    # torch with CUDA
+    "torch==2.10.0",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true

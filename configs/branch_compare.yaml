@@ -1,0 +1,9 @@
+repo: https://github.com/vllm-project/vllm.git
+model: meta-llama/Llama-3.1-8B-Instruct
+tp: 1
+
+runs:
+  - label: baseline
+    branch: main
+  - label: candidate
+    branch: my-optimization
