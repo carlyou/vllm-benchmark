@@ -9,9 +9,9 @@
 # and result collection.
 #
 # Usage:
-#   ./benchmark_ab.sh configs/mla_fusion.yaml
-#   CUDA_ARCH=12.1 ./benchmark_ab.sh configs/mla_fusion.yaml
-#   DEBUG=1 FORCE_BUILD=1 ./benchmark_ab.sh configs/mla_fusion.yaml
+#   ./benchmark.sh configs/mla_quant_fusion_b200.yaml
+#   CUDA_ARCH=12.1 ./benchmark.sh configs/mla_quant_fusion_dgx_spark.yaml
+#   DEBUG=1 FORCE_BUILD=1 ./benchmark.sh configs/mla_quant_fusion_h100.yaml
 #
 # Machine-specific env vars (override YAML):
 #   CUDA_ARCH      - e.g. "12.1" for GB10; sets CMAKE_CUDA_ARCHITECTURES
@@ -22,7 +22,7 @@
 #   WORK_DIR       - override work_dir from YAML
 #   MAX_JOBS       - parallel compilation jobs (default: 16)
 #   SERVER_PORT    - port for vllm server (default: 8000)
-#   SERVER_WAIT_TIMEOUT - seconds to wait for server health (default: 1800)
+#   SERVER_WAIT_TIMEOUT - seconds to wait for server health (default: 600)
 #
 # Build env vars (passed through to source builds):
 #   VLLM_FLASH_ATTN_SRC_DIR - local flash-attention source dir
@@ -41,7 +41,7 @@ TORCH_INDEX="${TORCH_INDEX:-https://download.pytorch.org/whl/cu130}"
 CUDA_ARCH="${CUDA_ARCH:-}"
 FORCE_BUILD="${FORCE_BUILD:-0}"
 SERVER_PORT="${SERVER_PORT:-8000}"
-SERVER_WAIT_TIMEOUT="${SERVER_WAIT_TIMEOUT:-1800}"
+SERVER_WAIT_TIMEOUT="${SERVER_WAIT_TIMEOUT:-600}"
 
 # ── Parse YAML config ─────────────────────────────────────────────────
 # Uses a Python one-liner to extract fields. Outputs shell variable assignments.
@@ -69,7 +69,7 @@ gpu_mem = cfg.get('gpu_memory_utilization')
 if gpu_mem is not None:
     print(f'CFG_GPU_MEMORY_UTILIZATION={q(gpu_mem)}')
 
-work_dir = cfg.get('work_dir', '~/vllm_ab_benchmark')
+work_dir = cfg.get('work_dir', '/tmp/vllm-benchmark')
 work_dir = os.path.expanduser(work_dir)
 print(f'CFG_WORK_DIR={q(work_dir)}')
 
@@ -140,16 +140,37 @@ echo ""
 
 # ── Helper: wait for server to be ready ───────────────────────────────
 wait_for_server() {
+    local log_file=${1:-}
     echo "Waiting for server on port $SERVER_PORT (timeout ${SERVER_WAIT_TIMEOUT}s)..."
+
+    # Tail server log in background for progress visibility
+    local tail_pid=""
+    if [[ -n "$log_file" && -f "$log_file" ]]; then
+        tail -n0 -F "$log_file" 2>/dev/null | sed 's/^/  [server] /' &
+        tail_pid=$!
+    fi
+
     local elapsed=0
     while (( elapsed < SERVER_WAIT_TIMEOUT )); do
         if curl -s "http://localhost:${SERVER_PORT}/health" > /dev/null 2>&1; then
+            [[ -n "$tail_pid" ]] && kill "$tail_pid" 2>/dev/null || true
+            echo ""
             echo "Server ready after ${elapsed}s"
             return 0
         fi
-        sleep 10
-        elapsed=$((elapsed + 10))
+        sleep 5
+        elapsed=$((elapsed + 5))
+        # Print progress every 30s if no log tailing
+        if [[ -z "$tail_pid" ]] && (( elapsed % 30 == 0 )) && [[ -n "$log_file" && -f "$log_file" ]]; then
+            local last_line
+            last_line=$(tail -1 "$log_file" 2>/dev/null || true)
+            echo "  ... ${elapsed}s | ${last_line:-(no output yet)}"
+        elif [[ -z "$tail_pid" ]] && (( elapsed % 30 == 0 )); then
+            echo "  ... ${elapsed}s elapsed"
+        fi
     done
+
+    [[ -n "$tail_pid" ]] && kill "$tail_pid" 2>/dev/null || true
     echo "ERROR: Server did not start within ${SERVER_WAIT_TIMEOUT}s"
     return 1
 }
@@ -281,6 +302,7 @@ run_benchmark() {
     echo "----------------------------------------------"
     echo "  Run: $label"
     echo "  Branch: $branch${commit:+ @ $commit}"
+    echo "  Model: $CFG_MODEL"
     [[ -n "$cc_json" ]] && echo "  Compilation config: $cc_json"
     echo "----------------------------------------------"
 
@@ -308,7 +330,7 @@ run_benchmark() {
     " &
     SERVER_PID=$!
 
-    if ! wait_for_server; then
+    if ! wait_for_server "$LOGS_DIR/${label}_server.log"; then
         echo "Server log tail:"
         tail -30 "$LOGS_DIR/${label}_server.log"
         kill_server
@@ -318,11 +340,11 @@ run_benchmark() {
     # Sanity check
     echo "Sanity check: generating one response..."
     local sanity_file="$LOGS_DIR/${label}_sanity.json"
-    curl -s "http://localhost:${SERVER_PORT}/v1/chat/completions" \
+    curl -s "http://localhost:${SERVER_PORT}/v1/completions" \
         -H "Content-Type: application/json" \
         -d "{
             \"model\": \"$CFG_MODEL\",
-            \"messages\": [{\"role\": \"user\", \"content\": \"Say hello in one sentence.\"}],
+            \"prompt\": \"Hello\",
             \"max_tokens\": 32
         }" > "$sanity_file"
 
@@ -330,7 +352,7 @@ run_benchmark() {
 import json, sys
 with open('$sanity_file') as f:
     d = json.load(f)
-print('Response:', d['choices'][0]['message']['content'][:80])
+print('Response:', d['choices'][0]['text'][:80])
 " 2>/dev/null; then
         echo "Sanity check passed."
     else
@@ -352,7 +374,7 @@ print('Response:', d['choices'][0]['message']['content'][:80])
             --random-input-len "$CFG_INPUT_LEN" \
             --random-output-len "$CFG_OUTPUT_LEN" \
             --ignore-eos \
-            2>&1 | tee "$outfile"
+            2>&1 | tee "$outfile" | grep -v '"POST /v1/completions HTTP/1.1" 200 OK'
     )
 
     kill_server
@@ -384,25 +406,79 @@ echo "============================================"
 echo "  RESULTS SUMMARY"
 echo "============================================"
 echo ""
+echo "Config:      $CONFIG_FILE"
+echo "Model:       $CFG_MODEL"
+echo "Repo:        $CFG_REPO"
+echo "TP:          $CFG_TP"
+echo "Max len:     $CFG_MAX_MODEL_LEN"
+echo "Prompts:     $CFG_NUM_PROMPTS (input=$CFG_INPUT_LEN, output=$CFG_OUTPUT_LEN)"
+echo ""
 
-printf "%-30s  %12s  %12s  %12s  %12s\n" \
-    "LABEL" "THROUGHPUT" "MED_TTFT" "MED_TPOT" "P99_TPOT"
-printf "%-30s  %12s  %12s  %12s  %12s\n" \
-    "-----" "----------" "--------" "--------" "--------"
-
-for f in "$RESULTS_DIR"/*.txt; do
-    [[ -f "$f" ]] || continue
-    label=$(basename "$f" .txt)
-
-    throughput=$(grep -oP 'Request throughput.*?:\s*\K[\d.]+' "$f" 2>/dev/null || echo "N/A")
-    median_ttft=$(grep -oP 'Median TTFT.*?:\s*\K[\d.]+' "$f" 2>/dev/null || echo "N/A")
-    median_tpot=$(grep -oP 'Median TPOT.*?:\s*\K[\d.]+' "$f" 2>/dev/null || echo "N/A")
-    p99_tpot=$(grep -oP 'P99 TPOT.*?:\s*\K[\d.]+' "$f" 2>/dev/null || echo "N/A")
-
-    printf "%-30s  %10s r/s  %9s ms  %9s ms  %9s ms\n" \
-        "$label" "$throughput" "$median_ttft" "$median_tpot" "$p99_tpot"
+# Collect labels for runs in this session (preserves config order)
+RUN_LABELS=()
+for (( i=0; i<CFG_NUM_RUNS; i++ )); do
+    label_var="CFG_RUN_${i}_LABEL"
+    RUN_LABELS+=("${!label_var}")
 done
 
-echo ""
+# Print side-by-side comparison table using Python for clean formatting
+python3 -c "
+import re, sys, os
+
+labels = sys.argv[1:]
+results_dir = '$RESULTS_DIR'
+
+# Metrics to extract (display_name, grep_pattern)
+metrics = [
+    ('Request throughput (req/s)',    r'Request throughput.*?:\s*([\d.]+)'),
+    ('Output token tput (tok/s)',     r'Output token throughput.*?:\s*([\d.]+)'),
+    ('Total token tput (tok/s)',      r'Total token throughput.*?:\s*([\d.]+)'),
+    ('Mean TTFT (ms)',                r'Mean TTFT.*?:\s*([\d.]+)'),
+    ('Median TTFT (ms)',             r'Median TTFT.*?:\s*([\d.]+)'),
+    ('P99 TTFT (ms)',                r'P99 TTFT.*?:\s*([\d.]+)'),
+    ('Mean TPOT (ms)',               r'Mean TPOT.*?:\s*([\d.]+)'),
+    ('Median TPOT (ms)',             r'Median TPOT.*?:\s*([\d.]+)'),
+    ('P99 TPOT (ms)',                r'P99 TPOT.*?:\s*([\d.]+)'),
+    ('Mean ITL (ms)',                r'Mean ITL.*?:\s*([\d.]+)'),
+    ('Median ITL (ms)',              r'Median ITL.*?:\s*([\d.]+)'),
+    ('P99 ITL (ms)',                 r'P99 ITL.*?:\s*([\d.]+)'),
+]
+
+# Parse result files
+data = {}
+for label in labels:
+    fpath = os.path.join(results_dir, f'{label}.txt')
+    vals = {}
+    if os.path.isfile(fpath):
+        content = open(fpath).read()
+        for name, pattern in metrics:
+            m = re.search(pattern, content)
+            vals[name] = m.group(1) if m else 'N/A'
+    else:
+        for name, _ in metrics:
+            vals[name] = '—'
+    data[label] = vals
+
+# Determine column widths
+metric_col = max(len(m[0]) for m in metrics) + 2
+val_cols = [max(len(l), 12) + 2 for l in labels]
+
+# Header
+header = f'{'Metric':<{metric_col}}'
+for i, l in enumerate(labels):
+    header += f'{l:>{val_cols[i]}}'
+print(header)
+print('-' * len(header))
+
+# Rows
+for name, _ in metrics:
+    row = f'{name:<{metric_col}}'
+    for i, l in enumerate(labels):
+        row += f'{data[l][name]:>{val_cols[i]}}'
+    print(row)
+
+print()
+" "${RUN_LABELS[@]}"
+
 echo "Full results in: $RESULTS_DIR/"
 echo "Server logs in:  $LOGS_DIR/"

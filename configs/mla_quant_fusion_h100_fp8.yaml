@@ -1,0 +1,28 @@
+repo: https://github.com/carlyou/vllm.git
+model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
+tp: 1
+max_model_len: 2048
+num_prompts: 200
+input_len: 128
+output_len: 128
+use_precompiled: true
+work_dir: /tmp/vllm-benchmark
+
+# H100: SM 90, FlashAttnMLA backend (UNIFORM_BATCH cudagraph support).
+# fuse_attn_quant auto-sets FULL, which resolves to FULL_DECODE_ONLY.
+
+runs:
+  - label: main_baseline
+    branch: main
+
+  - label: feature_fuse_off
+    branch: feat--mla-static-quant-fusion
+    compilation_config:
+      pass_config:
+        fuse_attn_quant: false
+
+  - label: feature_fuse_on
+    branch: feat--mla-static-quant-fusion
+    compilation_config:
+      pass_config:
+        fuse_attn_quant: true

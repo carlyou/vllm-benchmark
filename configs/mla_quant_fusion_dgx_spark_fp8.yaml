@@ -6,10 +6,12 @@ num_prompts: 200
 input_len: 128
 output_len: 128
 use_precompiled: true
-work_dir: ~/mla_fusion_benchmark
+gpu_memory_utilization: 0.7
+work_dir: /tmp/vllm-benchmark
 
-# H100: SM 90, FlashAttnMLA backend (UNIFORM_BATCH cudagraph support).
-# fuse_attn_quant auto-sets FULL, which resolves to FULL_DECODE_ONLY.
+# DGX Spark: GB10 (sm_121), TritonMLA backend only.
+# TritonMLA has _cudagraph_support=NEVER, so cudagraph_mode must be NONE
+# when fuse_attn_quant is enabled.
 
 runs:
   - label: main_baseline
@@ -24,5 +26,6 @@ runs:
   - label: feature_fuse_on
     branch: feat--mla-static-quant-fusion
     compilation_config:
+      cudagraph_mode: NONE
       pass_config:
         fuse_attn_quant: true
