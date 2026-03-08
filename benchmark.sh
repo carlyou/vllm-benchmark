@@ -269,7 +269,7 @@ install_branch() {
         fi
 
         # Install torch + build deps (needed for both paths with --no-build-isolation)
-        uv pip install torch --extra-index-url "$TORCH_INDEX"
+        uv pip install torch torchvision --extra-index-url "$TORCH_INDEX"
         grep -v '^torch==' requirements/build.txt | uv pip install -r -
 
         if [[ "$CFG_USE_PRECOMPILED" == "1" ]]; then
