@@ -453,6 +453,17 @@ echo "CUDA arch:   ${CUDA_ARCH:-auto}"
 echo "Precompiled: $([ "$CFG_USE_PRECOMPILED" = "1" ] && echo "true" || echo "false")"
 echo "Work dir:    $CFG_WORK_DIR"
 echo ""
+# Hardware/runtime info: GPU from nvidia-smi, torch/python from first run's venv
+FIRST_BRANCH_DIR=$(branch_to_dir "$CFG_RUN_0_BRANCH" "${CFG_RUN_0_COMMIT:-}")
+FIRST_VENV_PYTHON="$REPOS_DIR/$FIRST_BRANCH_DIR/.venv/bin/python3"
+echo "Hardware/Runtime:"
+echo "  GPU:       $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo 'N/A')"
+echo "  GPU mem:   $(nvidia-smi --query-gpu=memory.total --format=csv,noheader 2>/dev/null | head -1 || echo 'N/A')"
+echo "  CUDA:      $("$FIRST_VENV_PYTHON" -c 'import torch; print(torch.version.cuda)' 2>/dev/null || echo 'N/A')"
+echo "  PyTorch:   $("$FIRST_VENV_PYTHON" -c 'import torch; print(torch.__version__)' 2>/dev/null || echo 'N/A')"
+echo "  Python:    $("$FIRST_VENV_PYTHON" --version 2>/dev/null | awk '{print $2}' || echo 'N/A')"
+echo "  Platform:  $(uname -m)"
+echo ""
 echo "Runs:"
 for (( i=0; i<CFG_NUM_RUNS; i++ )); do
     label_var="CFG_RUN_${i}_LABEL"
