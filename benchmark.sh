@@ -68,6 +68,10 @@ print(f'CFG_USE_PRECOMPILED={q(int(cfg.get(\"use_precompiled\", True)))}')
 gpu_mem = cfg.get('gpu_memory_utilization')
 if gpu_mem is not None:
     print(f'CFG_GPU_MEMORY_UTILIZATION={q(gpu_mem)}')
+print(f'CFG_ENFORCE_EAGER={q(int(cfg.get(\"enforce_eager\", False)))}')
+cuda_arch = cfg.get('cuda_arch')
+if cuda_arch is not None:
+    print(f'CFG_CUDA_ARCH={q(cuda_arch)}')
 
 work_dir = cfg.get('work_dir', '/tmp/vllm-benchmark')
 work_dir = os.path.expanduser(work_dir)
@@ -115,11 +119,28 @@ eval "$(parse_config "$CONFIG_FILE")"
 # Env vars override YAML values
 CFG_WORK_DIR="${WORK_DIR:-$CFG_WORK_DIR}"
 CFG_USE_PRECOMPILED="${VLLM_USE_PRECOMPILED:-$CFG_USE_PRECOMPILED}"
-REPOS_DIR="$CFG_WORK_DIR/repos"
-RESULTS_DIR="$CFG_WORK_DIR/results"
-LOGS_DIR="$CFG_WORK_DIR/logs"
+CUDA_ARCH="${CUDA_ARCH:-${CFG_CUDA_ARCH:-}}"
+
+# Derive repo owner/name from URL for repos dir structure
+REPO_OWNER_NAME=$(python3 -c "
+import re
+url = '$CFG_REPO'
+m = re.search(r'[/:]([^/:]+)/([^/]+?)(?:\.git)?$', url)
+print(f'{m.group(1)}/{m.group(2)}') if m else print('unknown/repo')
+")
+REPOS_DIR="$CFG_WORK_DIR/repos/$REPO_OWNER_NAME"
+
+# Use config basename + timestamp for results/logs
+CONFIG_NAME=$(basename "$CONFIG_FILE" .yaml)
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+RUN_ID="${CONFIG_NAME}-${TIMESTAMP}"
+RESULTS_DIR="$CFG_WORK_DIR/results/$RUN_ID"
+LOGS_DIR="$CFG_WORK_DIR/logs/$RUN_ID"
 
 mkdir -p "$REPOS_DIR" "$RESULTS_DIR" "$LOGS_DIR"
+
+# Copy config into results for reproducibility
+cp "$CONFIG_FILE" "$RESULTS_DIR/config.yaml"
 
 echo "============================================"
 echo "  vLLM A/B Benchmark"
@@ -195,7 +216,7 @@ branch_to_dir() {
     local dir
     dir=$(echo "$branch" | sed 's|/|--|g')
     if [[ -n "$commit" ]]; then
-        dir="${dir}--${commit:0:8}"
+        dir="${dir}-${commit:0:8}"
     fi
     echo "$dir"
 }
@@ -317,6 +338,9 @@ run_benchmark() {
     if [[ -n "${CFG_GPU_MEMORY_UTILIZATION:-}" ]]; then
         server_args+=(--gpu-memory-utilization "$CFG_GPU_MEMORY_UTILIZATION")
     fi
+    if [[ "${CFG_ENFORCE_EAGER:-0}" == "1" ]]; then
+        server_args+=(--enforce-eager)
+    fi
     if [[ -n "$cc_json" ]]; then
         server_args+=(-cc "$cc_json")
     fi
@@ -401,7 +425,18 @@ for (( i=0; i<CFG_NUM_RUNS; i++ )); do
 done
 
 # ── Summary ──────────────────────────────────────────────────────────
-echo ""
+
+# Collect labels for runs in this session (preserves config order)
+RUN_LABELS=()
+for (( i=0; i<CFG_NUM_RUNS; i++ )); do
+    label_var="CFG_RUN_${i}_LABEL"
+    RUN_LABELS+=("${!label_var}")
+done
+
+# Generate summary and save to results dir
+SUMMARY_FILE="$RESULTS_DIR/summary.txt"
+
+{
 echo "============================================"
 echo "  RESULTS SUMMARY"
 echo "============================================"
@@ -412,39 +447,49 @@ echo "Repo:        $CFG_REPO"
 echo "TP:          $CFG_TP"
 echo "Max len:     $CFG_MAX_MODEL_LEN"
 echo "Prompts:     $CFG_NUM_PROMPTS (input=$CFG_INPUT_LEN, output=$CFG_OUTPUT_LEN)"
+echo "GPU mem util: ${CFG_GPU_MEMORY_UTILIZATION:-default}"
+echo "Enforce eager: $([ "$CFG_ENFORCE_EAGER" = "1" ] && echo "true" || echo "false")"
+echo "CUDA arch:   ${CUDA_ARCH:-auto}"
+echo "Precompiled: $([ "$CFG_USE_PRECOMPILED" = "1" ] && echo "true" || echo "false")"
+echo "Work dir:    $CFG_WORK_DIR"
 echo ""
-
-# Collect labels for runs in this session (preserves config order)
-RUN_LABELS=()
+echo "Runs:"
 for (( i=0; i<CFG_NUM_RUNS; i++ )); do
     label_var="CFG_RUN_${i}_LABEL"
-    RUN_LABELS+=("${!label_var}")
+    branch_var="CFG_RUN_${i}_BRANCH"
+    cc_var="CFG_RUN_${i}_CC"
+    echo "  - ${!label_var} (branch=${!branch_var}${!cc_var:+, compilation_config=${!cc_var}})"
 done
+echo ""
 
-# Print side-by-side comparison table using Python for clean formatting
 python3 -c "
 import re, sys, os
 
 labels = sys.argv[1:]
 results_dir = '$RESULTS_DIR'
 
-# Metrics to extract (display_name, grep_pattern)
 metrics = [
-    ('Request throughput (req/s)',    r'Request throughput.*?:\s*([\d.]+)'),
-    ('Output token tput (tok/s)',     r'Output token throughput.*?:\s*([\d.]+)'),
-    ('Total token tput (tok/s)',      r'Total token throughput.*?:\s*([\d.]+)'),
-    ('Mean TTFT (ms)',                r'Mean TTFT.*?:\s*([\d.]+)'),
-    ('Median TTFT (ms)',             r'Median TTFT.*?:\s*([\d.]+)'),
-    ('P99 TTFT (ms)',                r'P99 TTFT.*?:\s*([\d.]+)'),
-    ('Mean TPOT (ms)',               r'Mean TPOT.*?:\s*([\d.]+)'),
-    ('Median TPOT (ms)',             r'Median TPOT.*?:\s*([\d.]+)'),
-    ('P99 TPOT (ms)',                r'P99 TPOT.*?:\s*([\d.]+)'),
-    ('Mean ITL (ms)',                r'Mean ITL.*?:\s*([\d.]+)'),
-    ('Median ITL (ms)',              r'Median ITL.*?:\s*([\d.]+)'),
-    ('P99 ITL (ms)',                 r'P99 ITL.*?:\s*([\d.]+)'),
+    ('Successful requests',              r'Successful requests:\s*([\d.]+)'),
+    ('Failed requests',                  r'Failed requests:\s*([\d.]+)'),
+    ('Benchmark duration (s)',           r'Benchmark duration \(s\):\s*([\d.]+)'),
+    ('Total input tokens',              r'Total input tokens:\s*([\d.]+)'),
+    ('Total generated tokens',          r'Total generated tokens:\s*([\d.]+)'),
+    ('Request throughput (req/s)',       r'Request throughput.*?:\s*([\d.]+)'),
+    ('Output token tput (tok/s)',       r'Output token throughput.*?:\s*([\d.]+)'),
+    ('Peak output token tput (tok/s)',  r'Peak output token throughput.*?:\s*([\d.]+)'),
+    ('Total token tput (tok/s)',        r'Total token throughput.*?:\s*([\d.]+)'),
+    ('Peak concurrent requests',        r'Peak concurrent requests:\s*([\d.]+)'),
+    ('Mean TTFT (ms)',                  r'Mean TTFT.*?:\s*([\d.]+)'),
+    ('Median TTFT (ms)',                r'Median TTFT.*?:\s*([\d.]+)'),
+    ('P99 TTFT (ms)',                   r'P99 TTFT.*?:\s*([\d.]+)'),
+    ('Mean TPOT (ms)',                  r'Mean TPOT.*?:\s*([\d.]+)'),
+    ('Median TPOT (ms)',                r'Median TPOT.*?:\s*([\d.]+)'),
+    ('P99 TPOT (ms)',                   r'P99 TPOT.*?:\s*([\d.]+)'),
+    ('Mean ITL (ms)',                   r'Mean ITL.*?:\s*([\d.]+)'),
+    ('Median ITL (ms)',                 r'Median ITL.*?:\s*([\d.]+)'),
+    ('P99 ITL (ms)',                    r'P99 ITL.*?:\s*([\d.]+)'),
 ]
 
-# Parse result files
 data = {}
 for label in labels:
     fpath = os.path.join(results_dir, f'{label}.txt')
@@ -459,18 +504,15 @@ for label in labels:
             vals[name] = '—'
     data[label] = vals
 
-# Determine column widths
 metric_col = max(len(m[0]) for m in metrics) + 2
 val_cols = [max(len(l), 12) + 2 for l in labels]
 
-# Header
 header = f'{'Metric':<{metric_col}}'
 for i, l in enumerate(labels):
     header += f'{l:>{val_cols[i]}}'
 print(header)
 print('-' * len(header))
 
-# Rows
 for name, _ in metrics:
     row = f'{name:<{metric_col}}'
     for i, l in enumerate(labels):
@@ -479,6 +521,7 @@ for name, _ in metrics:
 
 print()
 " "${RUN_LABELS[@]}"
+} | tee "$SUMMARY_FILE"
 
 echo "Full results in: $RESULTS_DIR/"
 echo "Server logs in:  $LOGS_DIR/"
