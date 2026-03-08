@@ -13,7 +13,7 @@ work_dir: /tmp/vllm-benchmark
 # Cross-check to isolate compile/cudagraph effects from branch differences.
 
 runs:
-  - label: main_eager
+  - label: main_warmup
     branch: main
 
   - label: feature_fuse_off_eager
@@ -24,3 +24,6 @@ runs:
     compilation_config:
       pass_config:
         fuse_attn_quant: true
+
+  - label: main_eager
+    branch: main
