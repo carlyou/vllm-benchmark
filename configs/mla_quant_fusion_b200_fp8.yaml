@@ -12,7 +12,7 @@ work_dir: /tmp/vllm-benchmark
 # fuse_attn_quant auto-sets FULL, which resolves to FULL_DECODE_ONLY.
 
 runs:
-  - label: main_baseline
+  - label: main_warmup
     branch: main
 
   - label: feature_fuse_off
@@ -26,3 +26,6 @@ runs:
     compilation_config:
       pass_config:
         fuse_attn_quant: true
+
+  - label: main_baseline
+    branch: main
