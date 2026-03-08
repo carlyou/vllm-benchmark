@@ -162,7 +162,8 @@ echo ""
 # ── Helper: wait for server to be ready ───────────────────────────────
 wait_for_server() {
     local log_file=${1:-}
-    echo "Waiting for server on port $SERVER_PORT (timeout ${SERVER_WAIT_TIMEOUT}s)..."
+    local timeout=$SERVER_WAIT_TIMEOUT
+    echo "Waiting for server on port $SERVER_PORT (initial timeout ${timeout}s)..."
 
     # Tail server log in background for progress visibility
     local tail_pid=""
@@ -172,12 +173,19 @@ wait_for_server() {
     fi
 
     local elapsed=0
-    while (( elapsed < SERVER_WAIT_TIMEOUT )); do
+    while true; do
         if curl -s "http://localhost:${SERVER_PORT}/health" > /dev/null 2>&1; then
             [[ -n "$tail_pid" ]] && kill "$tail_pid" 2>/dev/null || true
             echo ""
             echo "Server ready after ${elapsed}s"
             return 0
+        fi
+        # Check if server process is still alive
+        if [[ -n "${SERVER_PID:-}" ]] && ! kill -0 "$SERVER_PID" 2>/dev/null; then
+            [[ -n "$tail_pid" ]] && kill "$tail_pid" 2>/dev/null || true
+            echo ""
+            echo "ERROR: Server process (PID=$SERVER_PID) exited prematurely after ${elapsed}s"
+            return 1
         fi
         sleep 5
         elapsed=$((elapsed + 5))
@@ -189,11 +197,40 @@ wait_for_server() {
         elif [[ -z "$tail_pid" ]] && (( elapsed % 30 == 0 )); then
             echo "  ... ${elapsed}s elapsed"
         fi
-    done
 
-    [[ -n "$tail_pid" ]] && kill "$tail_pid" 2>/dev/null || true
-    echo "ERROR: Server did not start within ${SERVER_WAIT_TIMEOUT}s"
-    return 1
+        # When timeout reached, ask user whether to continue
+        if (( elapsed >= timeout )); then
+            [[ -n "$tail_pid" ]] && kill "$tail_pid" 2>/dev/null || true
+            echo ""
+            echo "Server not ready after ${elapsed}s."
+            echo -n "Continue waiting? [Y/enter=+${timeout}s, <seconds>=custom, n=stop]: "
+            local answer
+            read -r answer </dev/tty
+            case "$answer" in
+                ""|[yY]|[yY][eE][sS])
+                    timeout=$((elapsed + SERVER_WAIT_TIMEOUT))
+                    echo "Extending timeout by ${SERVER_WAIT_TIMEOUT}s (until ${timeout}s total)..."
+                    ;;
+                [nN]|[nN][oO])
+                    echo "Aborting server wait."
+                    return 1
+                    ;;
+                *[0-9]*)
+                    timeout=$((elapsed + answer))
+                    echo "Extending timeout by ${answer}s (until ${timeout}s total)..."
+                    ;;
+                *)
+                    echo "Unrecognized input, stopping."
+                    return 1
+                    ;;
+            esac
+            # Restart log tailing
+            if [[ -n "$log_file" && -f "$log_file" ]]; then
+                tail -n0 -F "$log_file" 2>/dev/null | sed 's/^/  [server] /' &
+                tail_pid=$!
+            fi
+        fi
+    done
 }
 
 # ── Helper: kill server if running ────────────────────────────────────
