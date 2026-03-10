@@ -69,6 +69,7 @@ def _filter_runs(config: Config, labels: list[str] | None) -> Config:
         server=config.server,
         bench=config.bench,
         runs=filtered,
+        config_path=config.config_path,
     )
 
 
@@ -85,24 +86,24 @@ def main() -> None:
     _add_common_args(p_build)
     p_build.add_argument("--max-jobs", type=int, default=None)
 
-    # -- serve --
-    p_serve = sub.add_parser("serve",
-                              help="Start/warmup/stop servers (no benchmark)")
-    _add_common_args(p_serve)
-    p_serve.add_argument("--port", type=int, default=None)
+    # -- compile --
+    p_compile = sub.add_parser("compile",
+                               help="Pre-compile CUDA graphs (start/check/stop)")
+    _add_common_args(p_compile)
+    p_compile.add_argument("--port", type=int, default=None)
+
+    # -- bench --
+    p_bench = sub.add_parser("bench",
+                             help="Benchmark only (builds must exist)")
+    _add_common_args(p_bench)
+    p_bench.add_argument("--port", type=int, default=None)
 
     # -- run --
     p_run = sub.add_parser("run",
-                           help="Run benchmarks (builds must exist)")
+                           help="Build + benchmark (full pipeline)")
     _add_common_args(p_run)
     p_run.add_argument("--port", type=int, default=None)
-
-    # -- all --
-    p_all = sub.add_parser("all",
-                           help="Build + serve + run (default)")
-    _add_common_args(p_all)
-    p_all.add_argument("--port", type=int, default=None)
-    p_all.add_argument("--max-jobs", type=int, default=None)
+    p_run.add_argument("--max-jobs", type=int, default=None)
 
     args = parser.parse_args()
 
@@ -121,9 +122,9 @@ def main() -> None:
 
     if args.command == "build":
         build(config)
-    elif args.command == "serve":
+    elif args.command == "compile":
         serve(config)
-    elif args.command == "run":
+    elif args.command == "bench":
         bench(config)
     else:
         run_all(config)

@@ -15,7 +15,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from .config import Config, RunConfig, ServerConfig
+from .config import Config, ServerConfig
+from .resolved import ResolvedRun
 
 # Track all spawned server process groups for cleanup on exit.
 _active_pgids: set[int] = set()
@@ -23,8 +24,18 @@ _cleanup_lock = threading.Lock()
 
 
 def _cleanup_servers() -> None:
-    """Kill all tracked server process groups."""
+    """Kill all tracked server process groups (SIGTERM then SIGKILL)."""
     with _cleanup_lock:
+        for pgid in list(_active_pgids):
+            try:
+                os.killpg(pgid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                pass
+        if _active_pgids:
+            try:
+                time.sleep(3)
+            except (KeyboardInterrupt, SystemExit):
+                pass
         for pgid in list(_active_pgids):
             try:
                 os.killpg(pgid, signal.SIGKILL)
@@ -33,21 +44,38 @@ def _cleanup_servers() -> None:
         _active_pgids.clear()
 
 
-atexit.register(_cleanup_servers)
-
-# Also handle SIGTERM so cleanup runs on kill
-_orig_sigterm = signal.getsignal(signal.SIGTERM)
-
-
-def _sigterm_handler(signum, frame):
-    _cleanup_servers()
-    if callable(_orig_sigterm):
-        _orig_sigterm(signum, frame)
-    else:
-        raise SystemExit(1)
+# Deferred handler installation to avoid module-level side effects.
+_atexit_installed = False
+_sigterm_installed = False
+_handler_lock = threading.Lock()
 
 
-signal.signal(signal.SIGTERM, _sigterm_handler)
+def _install_handlers() -> None:
+    """Register atexit and SIGTERM handlers (once, on first Server use).
+
+    Signal handlers can only be installed from the main thread, so the
+    SIGTERM handler is deferred until a main-thread call occurs.  The
+    atexit handler is always safe to register from any thread.
+    """
+    global _atexit_installed, _sigterm_installed
+    with _handler_lock:
+        if not _atexit_installed:
+            atexit.register(_cleanup_servers)
+            _atexit_installed = True
+
+        if not _sigterm_installed and \
+                threading.current_thread() is threading.main_thread():
+            orig_sigterm = signal.getsignal(signal.SIGTERM)
+
+            def _sigterm_handler(signum, frame):
+                _cleanup_servers()
+                if callable(orig_sigterm):
+                    orig_sigterm(signum, frame)
+                else:
+                    raise SystemExit(1)
+
+            signal.signal(signal.SIGTERM, _sigterm_handler)
+            _sigterm_installed = True
 
 
 class _LogTail:
@@ -56,7 +84,7 @@ class _LogTail:
     def __init__(self, log_path: Path, prefix: str):
         self._path = log_path
         self._prefix = prefix
-        self._stop = threading.Event()
+        self._stop_ev = threading.Event()
         self._lines: list[str] = []
         self._lock = threading.Lock()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -67,16 +95,16 @@ class _LogTail:
         self._thread.start()
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_ev.set()
         self._thread.join(timeout=2)
 
     def _run(self) -> None:
-        while not self._stop.is_set():
+        while not self._stop_ev.is_set():
             try:
                 if self._path.exists():
                     size = self._path.stat().st_size
                     if size > self._pos:
-                        with open(self._path) as f:
+                        with open(self._path, errors="replace") as f:
                             f.seek(self._pos)
                             new_data = f.read()
                             self._pos = f.tell()
@@ -87,7 +115,7 @@ class _LogTail:
                                         f"{self._prefix}[server] {line}")
             except OSError:
                 pass
-            self._stop.wait(0.5)
+            self._stop_ev.wait(0.5)
 
     def drain(self) -> list[str]:
         """Return and clear collected lines."""
@@ -107,18 +135,21 @@ class Server:
     at milestones (server ready, sanity check, stop) to avoid interleaving.
     """
 
-    def __init__(self, repo_dir: Path, config: Config,
-                 run: RunConfig, log_dir: Path, prefix: str = "",
+    def __init__(self, resolved: ResolvedRun, config: Config,
+                 log_dir: Path, prefix: str = "",
                  flush_jitter: float = 0.0):
-        self.repo_dir = repo_dir
+        _install_handlers()
+        self.resolved = resolved
+        self.repo_dir = resolved.repo_dir
         self.config = config
-        self.run = run
-        self.server: ServerConfig = config.effective_server(run)
-        self.log_path = log_dir / f"{run.label}_server.log"
+        self.run = resolved.run
+        self.server: ServerConfig = resolved.server
+        self.log_path = log_dir / f"{resolved.label}_server.log"
         self.prefix = prefix
-        self._buffered = bool(prefix)
+        self._buffered = flush_jitter > 0
         self._flush_jitter = flush_jitter
         self._proc: subprocess.Popen | None = None
+        self._log_fh = None
         self._buf: list[str] = []
         self._log_tail: _LogTail | None = None
 
@@ -145,8 +176,12 @@ class Server:
 
     def __enter__(self) -> Server:
         self._start()
-        self._wait_health()
-        self._sanity_check()
+        try:
+            self._wait_health()
+            self._sanity_check()
+        except BaseException:
+            self._stop()
+            raise
         return self
 
     def __exit__(self, *exc) -> None:
@@ -158,7 +193,7 @@ class Server:
 
     def _build_serve_cmd(self) -> list[str]:
         srv = self.server
-        vllm_bin = str(self.repo_dir / ".venv" / "bin" / "vllm")
+        vllm_bin = str(self.resolved.vllm_bin)
         cmd = [
             vllm_bin, "serve", self.config.project.model,
             "--tensor-parallel-size", str(srv.tp),
@@ -190,14 +225,19 @@ class Server:
         serve_cmd = self._build_serve_cmd()
         self._log(f"$ {' '.join(serve_cmd)}")
 
-        log_file = open(self.log_path, "w")
-        self._proc = subprocess.Popen(
-            serve_cmd,
-            cwd=self.repo_dir,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        self._log_fh = open(self.log_path, "w")
+        try:
+            self._proc = subprocess.Popen(
+                serve_cmd,
+                cwd=self.repo_dir,
+                stdout=self._log_fh,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except Exception:
+            self._log_fh.close()
+            self._log_fh = None
+            raise
         # Track for cleanup on crash/exit
         with _cleanup_lock:
             _active_pgids.add(os.getpgid(self._proc.pid))
@@ -214,14 +254,15 @@ class Server:
         self._log_tail = _LogTail(self.log_path, self.prefix)
         self._log_tail.start()
 
-        elapsed = 0
+        start = time.monotonic()
         try:
             while True:
                 try:
                     req = urllib.request.Request(f"{self.base_url}/health")
                     urllib.request.urlopen(req, timeout=2)
                     self._log_tail.stop()
-                    self._log(f"Server ready after {elapsed}s")
+                    elapsed = time.monotonic() - start
+                    self._log(f"Server ready after {elapsed:.0f}s")
                     self._flush()
                     self._log_tail = None
                     return
@@ -230,16 +271,18 @@ class Server:
 
                 if self._proc and self._proc.poll() is not None:
                     self._log_tail.stop()
+                    elapsed = time.monotonic() - start
                     self._log(
                         f"ERROR: Server process exited prematurely "
-                        f"after {elapsed}s (rc={self._proc.returncode})")
+                        f"after {elapsed:.0f}s "
+                        f"(rc={self._proc.returncode})")
                     self._dump_log_tail()
                     self._flush()
                     self._log_tail = None
                     raise RuntimeError("Server exited prematurely")
 
                 time.sleep(5)
-                elapsed += 5
+                elapsed = time.monotonic() - start
 
                 # Periodically flush buffered server log
                 self._flush()
@@ -248,7 +291,7 @@ class Server:
                     self._log_tail.stop()
                     self._flush()
                     self._log_tail = None
-                    self._log(f"Server not ready after {elapsed}s.")
+                    self._log(f"Server not ready after {elapsed:.0f}s.")
                     timeout = self._ask_extend_timeout(elapsed, timeout)
                     self._log_tail = _LogTail(self.log_path, self.prefix)
                     self._log_tail.start()
@@ -258,8 +301,13 @@ class Server:
                 self._log_tail = None
             raise
 
-    def _ask_extend_timeout(self, elapsed: int, current_timeout: int) -> int:
+    def _ask_extend_timeout(self, elapsed: float,
+                            current_timeout: int) -> float:
         """Interactive timeout extension prompt."""
+        if self._buffered:
+            raise RuntimeError(
+                f"Server timed out after {elapsed:.0f}s "
+                f"(interactive prompt disabled in parallel mode)")
         default_ext = self.server.wait_timeout
         prompt = (f"{self.prefix}Continue waiting? "
                   f"[Y/enter=+{default_ext}s, <seconds>=custom, n=stop]: ")
@@ -271,7 +319,7 @@ class Server:
         if answer in ("", "y", "Y", "yes", "YES"):
             new_timeout = elapsed + default_ext
             self._log(f"Extending timeout by {default_ext}s "
-                      f"(until {new_timeout}s total)...")
+                      f"(until {new_timeout:.0f}s total)...")
             return new_timeout
         elif answer.lower() in ("n", "no"):
             raise RuntimeError("User aborted server wait")
@@ -280,7 +328,7 @@ class Server:
                 extra = int(answer)
                 new_timeout = elapsed + extra
                 self._log(f"Extending timeout by {extra}s "
-                          f"(until {new_timeout}s total)...")
+                          f"(until {new_timeout:.0f}s total)...")
                 return new_timeout
             except ValueError:
                 raise RuntimeError(f"Unrecognized input: {answer!r}")
@@ -337,30 +385,48 @@ class Server:
             return
         pid = self._proc.pid
         self._log(f"Stopping server (PID={pid})...")
+        # Block SIGINT during cleanup so Ctrl+C can't leave orphaned servers
         pgid = None
+        prev_handler = signal.getsignal(signal.SIGINT)
         try:
-            pgid = os.getpgid(pid)
-            os.killpg(pgid, signal.SIGTERM)
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+        except ValueError:
+            # Not in main thread; can't change signal handler
+            prev_handler = None
+        try:
             try:
-                self._proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                self._log("Server didn't stop after SIGTERM, sending SIGKILL...")
-                os.killpg(pgid, signal.SIGKILL)
-                self._proc.wait(timeout=5)
-        except (ProcessLookupError, PermissionError):
-            try:
-                self._proc.kill()
-                self._proc.wait(timeout=5)
-            except (ProcessLookupError, subprocess.TimeoutExpired):
-                pass
-        # Untrack from cleanup
-        if pgid is not None:
-            with _cleanup_lock:
-                _active_pgids.discard(pgid)
-        self._proc = None
-        self._log("Server stopped.")
-        self._flush()
-        time.sleep(3)
+                pgid = os.getpgid(pid)
+                os.killpg(pgid, signal.SIGTERM)
+                try:
+                    self._proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    self._log("Server didn't stop after SIGTERM, "
+                              "sending SIGKILL...")
+                    os.killpg(pgid, signal.SIGKILL)
+                    self._proc.wait(timeout=5)
+            except (ProcessLookupError, PermissionError):
+                try:
+                    self._proc.kill()
+                    self._proc.wait(timeout=5)
+                except (ProcessLookupError, subprocess.TimeoutExpired):
+                    pass
+            # Untrack from cleanup
+            if pgid is not None:
+                with _cleanup_lock:
+                    _active_pgids.discard(pgid)
+            self._proc = None
+            if self._log_fh:
+                self._log_fh.close()
+                self._log_fh = None
+            self._log("Server stopped.")
+            self._flush()
+            time.sleep(3)
+        finally:
+            if prev_handler is not None:
+                try:
+                    signal.signal(signal.SIGINT, prev_handler)
+                except ValueError:
+                    pass
 
     def _dump_log_tail(self, lines: int = 30) -> None:
         """Print last N lines of server log."""

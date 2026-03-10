@@ -25,7 +25,7 @@ class ProjectConfig:
 @dataclass
 class BuildConfig:
     use_precompiled: bool = True
-    install_flash_attn: bool = True
+    install_flash_attn: bool = False
     cuda_arch: str | None = None
     max_jobs: int = 16
     torch_index: str = "https://download.pytorch.org/whl/cu130"
@@ -46,7 +46,7 @@ class ServerConfig:
 
 @dataclass
 class BenchConfig:
-    num_prompts: int = 200
+    num_prompts: int = 1000
     input_len: int = 128
     output_len: int = 128
     warmup_prompts: int = 3
@@ -67,6 +67,13 @@ def _overlay(base, overrides: dict, cls):
     """Create a new dataclass instance by overlaying overrides on base."""
     if not overrides:
         return base
+    valid_keys = {f.name for f in dc_fields(cls)}
+    unknown = set(overrides) - valid_keys
+    if unknown:
+        raise ValueError(
+            f"Unknown override key(s) for {cls.__name__}: "
+            f"{', '.join(sorted(unknown))}. "
+            f"Valid keys: {', '.join(sorted(valid_keys))}")
     kwargs = {f.name: getattr(base, f.name) for f in dc_fields(base)}
     kwargs.update(overrides)
     return cls(**kwargs)
@@ -79,6 +86,7 @@ class Config:
     server: ServerConfig = field(default_factory=ServerConfig)
     bench: BenchConfig = field(default_factory=BenchConfig)
     runs: list[RunConfig] = field(default_factory=list)
+    config_path: Path | None = field(default=None, repr=False)
 
     def effective_build(self, run: RunConfig) -> BuildConfig:
         """Top-level build config with per-run overrides applied."""
@@ -127,17 +135,29 @@ def _build_section(cls, raw: dict, section_name: str):
     return cls(**filtered)
 
 
+_RUN_FIELDS = {"label", "branch", "commit", "build", "server", "bench"}
+
+
 def _parse_runs(raw_runs: list[dict]) -> list[RunConfig]:
     runs = []
-    for r in raw_runs:
-        runs.append(RunConfig(
-            label=r["label"],
-            branch=r["branch"],
-            commit=r.get("commit", ""),
-            build=r.get("build") or {},
-            server=r.get("server") or {},
-            bench=r.get("bench") or {},
-        ))
+    for i, r in enumerate(raw_runs):
+        unknown = set(r) - _RUN_FIELDS
+        if unknown:
+            warnings.warn(
+                f"runs[{i}] ({r.get('label', '?')}): unknown key(s): "
+                f"{', '.join(sorted(unknown))!r}")
+        try:
+            runs.append(RunConfig(
+                label=r["label"],
+                branch=r["branch"],
+                commit=r.get("commit", ""),
+                build=r.get("build") or {},
+                server=r.get("server") or {},
+                bench=r.get("bench") or {},
+            ))
+        except KeyError as e:
+            raise ValueError(
+                f"runs[{i}]: missing required field {e}") from e
     return runs
 
 
@@ -190,6 +210,7 @@ def load_config(config_path: str, **overrides) -> Config:
         server=server,
         bench=bench,
         runs=runs,
+        config_path=path,
     )
 
     # Validate

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -12,7 +13,8 @@ from datetime import datetime
 from pathlib import Path
 
 from .builder import branch_to_dir, install_all
-from .config import Config, RunConfig
+from .config import Config
+from .resolved import ResolvedRun, resolve_runs
 from .server import Server
 from .summary import format_summary
 
@@ -32,19 +34,26 @@ def repos_dir_for(config: Config) -> Path:
     return work_dir / "repos" / owner_name
 
 
-def _require_builds(config: Config) -> Path:
-    """Validate that builds exist for all runs. Returns repos_dir."""
+def _require_builds(config: Config) -> list[ResolvedRun]:
+    """Validate that builds exist for all runs. Returns resolved runs."""
     repos_dir = repos_dir_for(config)
-    for run in config.runs:
-        d = repos_dir / branch_to_dir(run.branch, run.commit)
+    resolved = resolve_runs(config, repos_dir)
+    for r in resolved:
+        d = r.repo_dir
         if not (d / ".venv").exists():
-            print(f"ERROR: No build found for {run.branch}"
-                  f"{f' @ {run.commit}' if run.commit else ''}\n"
+            print(f"ERROR: No build found for {r.branch}"
+                  f"{f' @ {r.commit}' if r.commit else ''}\n"
                   f"  Expected: {d}\n"
                   f"  Run 'vllm-bench build' first.",
                   file=sys.stderr)
             sys.exit(1)
-    return repos_dir
+        if not (d / ".build_state.json").exists():
+            print(f"WARNING: Build state missing for {r.branch}"
+                  f"{f' @ {r.commit}' if r.commit else ''}\n"
+                  f"  Venv exists but no .build_state.json ({d})\n"
+                  f"  Build caching will not work for this branch.",
+                  file=sys.stderr)
+    return resolved
 
 
 def build(config: Config) -> Path:
@@ -62,52 +71,50 @@ def build(config: Config) -> Path:
     return repos_dir
 
 
-def _compile_one(repo_dir: Path, config: Config, run: RunConfig,
-                 logs_dir: Path, port: int,
-                 prefix: str = "", flush_jitter: float = 0.0) -> str:
+def _compile_one(resolved: ResolvedRun, config: Config,
+                 logs_dir: Path, prefix: str = "",
+                 flush_jitter: float = 0.0) -> str:
     """Start server, compile CUDA graphs, sanity check, stop. Returns label."""
-    compile_run = RunConfig(
-        label=run.label, branch=run.branch, commit=run.commit,
-        build=run.build,
-        server={**run.server, "port": port},
-        bench=run.bench,
-    )
-    with Server(repo_dir, config, compile_run, logs_dir,
+    with Server(resolved, config, logs_dir,
                 prefix=prefix, flush_jitter=flush_jitter):
         if prefix:
-            print(f"{prefix}Server for {run.label!r} compiled successfully.",
-                  flush=True)
+            print(f"{prefix}Server for {resolved.label!r} compiled "
+                  f"successfully.", flush=True)
         else:
-            print(f"Server for {run.label!r} compiled successfully.")
-    return run.label
+            print(f"Server for {resolved.label!r} compiled successfully.")
+    return resolved.label
 
 
 def serve(config: Config) -> None:
     """Start, compile CUDA graphs, sanity check, and stop servers.
 
-    When server.parallel_compile is True, all servers compile concurrently
+    When server.parallel_compile > 1, all servers compile concurrently
     on auto-assigned ports (base_port + offset per run).
     """
-    repos_dir = _require_builds(config)
-    _, logs_dir = _setup_run_dirs(config)
+    resolved_runs = _require_builds(config)
+    work_dir = Path(config.project.work_dir)
+    name = config.project.name.replace("/", "-")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    logs_dir = work_dir / "logs" / f"{name}-serve-{timestamp}"
+    logs_dir.mkdir(parents=True, exist_ok=True)
     base_port = config.server.port
 
     workers = config.server.parallel_compile
-    n_runs = len(config.runs)
+    n_runs = len(resolved_runs)
 
     if workers > 1 and n_runs > 1:
         workers = min(workers, n_runs)
         print(f"Compiling {n_runs} run(s) ({workers} parallel)...")
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {}
-            for i, run in enumerate(config.runs):
-                repo_dir = repos_dir / branch_to_dir(run.branch, run.commit)
+            for i, resolved in enumerate(resolved_runs):
                 port = base_port + i
                 prefix = f"[serve {i + 1}] "
+                r = resolved.with_server(port=port)
                 futures[pool.submit(
-                    _compile_one, repo_dir, config, run, logs_dir, port,
+                    _compile_one, r, config, logs_dir,
                     prefix=prefix, flush_jitter=i * 1.0,
-                )] = run.label
+                )] = resolved.label
             failed = []
             for future in as_completed(futures):
                 label = futures[future]
@@ -124,11 +131,11 @@ def serve(config: Config) -> None:
                     f"Try reducing server.parallel_compile")
     else:
         print(f"Compiling {n_runs} run(s)...")
-        for i, run in enumerate(config.runs):
-            repo_dir = repos_dir / branch_to_dir(run.branch, run.commit)
+        for i, resolved in enumerate(resolved_runs):
+            port = base_port + i
             prefix = f"[serve {i + 1}] "
-            _compile_one(repo_dir, config, run, logs_dir, base_port + i,
-                         prefix=prefix)
+            r = resolved.with_server(port=port)
+            _compile_one(r, config, logs_dir, prefix=prefix)
 
     print("All servers compiled and verified.")
 
@@ -151,38 +158,33 @@ def _setup_run_dirs(config: Config) -> tuple[Path, Path]:
     return results_dir, logs_dir
 
 
-def _execute_benchmark(repo_dir: Path, config: Config,
-                       run: RunConfig, results_dir: Path,
+def _execute_benchmark(resolved: ResolvedRun, config: Config,
+                       results_dir: Path,
                        prefix: str = "") -> Path:
     """Run vllm bench serve and capture output."""
-    bench = config.effective_bench(run)
-    srv = config.effective_server(run)
-    outfile = results_dir / f"{run.label}.txt"
-    venv_activate = repo_dir / ".venv" / "bin" / "activate"
+    bench = resolved.bench
+    srv = resolved.server
+    outfile = results_dir / f"{resolved.label}.txt"
+    vllm_bin = str(resolved.vllm_bin)
 
-    cmd = (
-        f"source {venv_activate} && "
-        f"vllm bench serve "
-        f"--backend vllm "
-        f"--model {config.project.model} "
-        f"--port {srv.port} "
-        f"--num-prompts {bench.num_prompts} "
-        f"--request-rate inf "
-        f"--random-input-len {bench.input_len} "
-        f"--random-output-len {bench.output_len} "
-        f"--ignore-eos"
-    )
+    cmd = [
+        vllm_bin, "bench", "serve",
+        "--backend", "vllm",
+        "--model", config.project.model,
+        "--port", str(srv.port),
+        "--num-prompts", str(bench.num_prompts),
+        "--request-rate", "inf",
+        "--random-input-len", str(bench.input_len),
+        "--random-output-len", str(bench.output_len),
+        "--ignore-eos",
+    ]
 
-    print(f"{prefix}$ vllm bench serve --model {config.project.model} "
-          f"--port {srv.port} --num-prompts {bench.num_prompts} "
-          f"--random-input-len {bench.input_len} "
-          f"--random-output-len {bench.output_len}",
-          flush=True)
+    print(f"{prefix}$ {' '.join(cmd)}", flush=True)
 
     with open(outfile, "w") as out_f:
         proc = subprocess.Popen(
-            ["bash", "-c", cmd],
-            cwd=repo_dir,
+            cmd,
+            cwd=resolved.repo_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -192,7 +194,12 @@ def _execute_benchmark(repo_dir: Path, config: Config,
             if '"POST /v1/completions HTTP/1.1" 200 OK' not in line:
                 sys.stdout.write(f"{prefix}{line}")
                 sys.stdout.flush()
-        proc.wait()
+        rc = proc.wait()
+
+    if rc != 0:
+        raise RuntimeError(
+            f"Benchmark for {resolved.label!r} failed (exit code {rc}). "
+            f"Output saved to {outfile}")
 
     print(f"{prefix}Results saved to {outfile}", flush=True)
     return outfile
@@ -203,24 +210,27 @@ def bench(config: Config) -> dict[str, Path]:
 
     Returns mapping of label -> result file path.
     """
-    repos_dir = _require_builds(config)
+    resolved_runs = _require_builds(config)
     results_dir, logs_dir = _setup_run_dirs(config)
 
-    print(f"Running {len(config.runs)} benchmark(s)...")
+    # Save config for reproducibility
+    if config.config_path and config.config_path.exists():
+        shutil.copy2(config.config_path, results_dir / "config.yaml")
+
+    print(f"Running {len(resolved_runs)} benchmark(s)...")
     results: dict[str, Path] = {}
-    for i, run in enumerate(config.runs):
-        repo_dir = repos_dir / branch_to_dir(run.branch, run.commit)
-        bench_cfg = config.effective_bench(run)
+    for i, resolved in enumerate(resolved_runs):
         prefix = f"[bench {i + 1}] "
-        with Server(repo_dir, config, run, logs_dir,
+        with Server(resolved, config, logs_dir,
                      prefix=prefix) as server:
-            server.warmup(bench_cfg.warmup_prompts)
+            server.warmup(resolved.bench.warmup_prompts)
             result_path = _execute_benchmark(
-                repo_dir, config, run, results_dir, prefix=prefix)
-            results[run.label] = result_path
+                resolved, config, results_dir, prefix=prefix)
+            results[resolved.label] = result_path
 
     # Generate summary
-    summary = format_summary(config, results, repos_dir)
+    repos_dir = repos_dir_for(config)
+    summary = format_summary(config, results, resolved_runs, repos_dir)
     summary_file = results_dir / "summary.txt"
     summary_file.write_text(summary)
     print(summary)
