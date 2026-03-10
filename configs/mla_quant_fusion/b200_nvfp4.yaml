@@ -1,0 +1,27 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: carlyou/DeepSeek-V2-Lite-NVFP4
+
+# B200: SM 100, NVFP4 quantized DeepSeek-V2-Lite (~9.4 GB).
+# Tests MLAAttentionNvfp4QuantPattern fusion.
+
+runs:
+  - label: main_warmup
+    branch: main
+
+  - label: feature_fuse_off
+    branch: feat--mla-static-quant-fusion
+    server:
+      compilation_config:
+        pass_config:
+          fuse_attn_quant: false
+
+  - label: feature_fuse_on
+    branch: feat--mla-static-quant-fusion
+    server:
+      compilation_config:
+        pass_config:
+          fuse_attn_quant: true
+
+  - label: main_baseline
+    branch: main

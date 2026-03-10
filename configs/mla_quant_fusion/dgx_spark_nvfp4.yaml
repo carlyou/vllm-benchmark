@@ -1,0 +1,35 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: carlyou/DeepSeek-V2-Lite-NVFP4
+
+build:
+  cuda_arch: "12.1"
+  prebuilt_flash_attn: false
+
+server:
+  gpu_memory_utilization: 0.8
+  parallel_compile: 3
+
+# DGX Spark: GB10 (sm_121), TritonMLA backend only.
+# NVFP4 quantized DeepSeek-V2-Lite (~9.4 GB).
+# enforce_eager: true to skip CUDA graph capture — the CUTLASS FP4 MoE
+# kernel (sm120 TMA grouped GEMM) crashes during graph capture on sm121.
+
+runs:
+  - label: feature_fuse_off
+    branch: feat--mla-static-quant-fusion
+    server:
+      compilation_config:
+        pass_config:
+          fuse_attn_quant: false
+
+  - label: feature_fuse_on
+    branch: feat--mla-static-quant-fusion
+    server:
+      compilation_config:
+        cudagraph_mode: NONE
+        pass_config:
+          fuse_attn_quant: true
+
+  - label: main_baseline
+    branch: main

@@ -1,12 +1,6 @@
-repo: https://github.com/carlyou/vllm.git
-model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
-tp: 1
-max_model_len: 2048
-num_prompts: 200
-input_len: 128
-output_len: 128
-use_precompiled: true
-work_dir: /tmp/vllm-benchmark
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
 
 # B200: Isolate cudagraph mode effect on fuse_attn_quant.
 # fuse_attn_quant forces FULL cudagraph (no piecewise), which may regress
@@ -22,35 +16,40 @@ runs:
 
   - label: fuse_off_cg_piecewise
     branch: feat--mla-static-quant-fusion
-    compilation_config:
-      cudagraph_mode: FULL_AND_PIECEWISE
-      pass_config:
-        fuse_attn_quant: false
+    server:
+      compilation_config:
+        cudagraph_mode: FULL_AND_PIECEWISE
+        pass_config:
+          fuse_attn_quant: false
 
   - label: fuse_off_cg_full
     branch: feat--mla-static-quant-fusion
-    compilation_config:
-      cudagraph_mode: FULL
-      pass_config:
-        fuse_attn_quant: false
+    server:
+      compilation_config:
+        cudagraph_mode: FULL
+        pass_config:
+          fuse_attn_quant: false
 
   - label: fuse_off_cg_none
     branch: feat--mla-static-quant-fusion
-    compilation_config:
-      cudagraph_mode: NONE
-      pass_config:
-        fuse_attn_quant: false
+    server:
+      compilation_config:
+        cudagraph_mode: NONE
+        pass_config:
+          fuse_attn_quant: false
 
   - label: fuse_on_cg_full
     branch: feat--mla-static-quant-fusion
-    compilation_config:
-      cudagraph_mode: FULL
-      pass_config:
-        fuse_attn_quant: true
+    server:
+      compilation_config:
+        cudagraph_mode: FULL
+        pass_config:
+          fuse_attn_quant: true
 
   - label: fuse_on_cg_none
     branch: feat--mla-static-quant-fusion
-    compilation_config:
-      cudagraph_mode: NONE
-      pass_config:
-        fuse_attn_quant: true
+    server:
+      compilation_config:
+        cudagraph_mode: NONE
+        pass_config:
+          fuse_attn_quant: true

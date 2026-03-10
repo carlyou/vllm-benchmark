@@ -1,0 +1,32 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
+
+build:
+  cuda_arch: "12.1"
+  prebuilt_flash_attn: false
+
+server:
+  gpu_memory_utilization: 0.8
+
+runs:
+  - label: main_baseline
+    branch: main
+
+  - label: feature_fuse_off
+    branch: feat--mla-static-quant-fusion
+    server:
+      compilation_config:
+        pass_config:
+          fuse_attn_quant: false
+
+# DGX Spark: GB10 (sm_121), TritonMLA backend only.
+# TritonMLA has _cudagraph_support=NEVER, so cudagraph_mode must be NONE
+# when fuse_attn_quant is enabled.
+  - label: feature_fuse_on
+    branch: feat--mla-static-quant-fusion
+    server:
+      compilation_config:
+        cudagraph_mode: NONE
+        pass_config:
+          fuse_attn_quant: true

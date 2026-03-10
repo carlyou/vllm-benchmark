@@ -1,5 +1,9 @@
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "vllm-benchmark"
+name = "vllm-bench"
 version = "0.1.0"
 description = "A/B benchmark for MLA attention + quant fusion"
 readme = "README.md"
@@ -18,7 +22,15 @@ dependencies = [
     "pip",
     # torch with CUDA
     "torch==2.10.0",
+    # benchmark CLI deps
+    "pyyaml",
 ]
+
+[project.scripts]
+vllm-bench = "vllm_bench.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }
