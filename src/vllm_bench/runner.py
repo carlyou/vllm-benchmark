@@ -51,7 +51,14 @@ def build(config: Config) -> Path:
     """Clone and build all unique branches. Returns repos_dir."""
     repos_dir = repos_dir_for(config)
     repos_dir.mkdir(parents=True, exist_ok=True)
-    install_all(config, repos_dir)
+
+    work_dir = Path(config.project.work_dir)
+    name = config.project.name.replace("/", "-")
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    logs_dir = work_dir / "logs" / f"{name}-build-{timestamp}"
+
+    install_all(config, repos_dir, logs_dir=logs_dir)
+    print(f"Build logs in: {logs_dir}/")
     return repos_dir
 
 

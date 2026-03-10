@@ -30,10 +30,17 @@ def _prefix() -> str:
     return getattr(_local, "prefix", "")
 
 
+def _log_file():
+    return getattr(_local, "log_file", None)
+
+
 def _log(msg: str) -> None:
     prefix = _prefix()
+    log_f = _log_file()
     for line in msg.splitlines():
         print(f"{prefix}{line}", flush=True)
+        if log_f:
+            log_f.write(f"{line}\n")
 
 
 def _run(cmd: list[str], cwd: Path | None = None, env: dict | None = None,
@@ -43,8 +50,9 @@ def _run(cmd: list[str], cwd: Path | None = None, env: dict | None = None,
     if env:
         merged_env = {**os.environ, **env}
     prefix = _prefix()
-    if prefix:
-        # Capture and prefix each line for parallel builds
+    log_f = _log_file()
+    if prefix or log_f:
+        # Capture output for prefixing and/or logging to file
         result = subprocess.run(
             cmd, cwd=cwd, env=merged_env, check=check,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -52,6 +60,8 @@ def _run(cmd: list[str], cwd: Path | None = None, env: dict | None = None,
         if result.stdout:
             for line in result.stdout.splitlines():
                 print(f"{prefix}{line}", flush=True)
+                if log_f:
+                    log_f.write(f"{line}\n")
         return result
     return subprocess.run(
         cmd, cwd=cwd, env=merged_env, check=check,
@@ -190,19 +200,31 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
 def _install_one(repo_url: str, build: BuildConfig,
                  branch: str, commit: str,
                  repos_dir: Path, max_jobs: int,
-                 builder_id: int = 0) -> Path:
+                 builder_id: int = 0,
+                 logs_dir: Path | None = None) -> Path:
     """Install a single branch (clone + venv + build). Runs in subprocess."""
     if builder_id:
         _local.prefix = f"[build {builder_id}] "
 
-    _log(f"{'=' * 44}")
-    _log(f"  Installing: {branch}{f' @ {commit}' if commit else ''}")
-    _log(f"{'=' * 44}")
+    dir_name = branch_to_dir(branch, commit)
+    if logs_dir:
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        _local.log_file = open(logs_dir / f"build-{dir_name}.log", "w")
 
-    repo_dir = clone_or_update(repo_url, branch, commit, repos_dir)
-    setup_venv(repo_dir)
-    build_vllm(repo_dir, build, max_jobs=max_jobs)
-    return repo_dir
+    try:
+        _log(f"{'=' * 44}")
+        _log(f"  Installing: {branch}{f' @ {commit}' if commit else ''}")
+        _log(f"{'=' * 44}")
+
+        repo_dir = clone_or_update(repo_url, branch, commit, repos_dir)
+        setup_venv(repo_dir)
+        build_vllm(repo_dir, build, max_jobs=max_jobs)
+        return repo_dir
+    finally:
+        log_f = _log_file()
+        if log_f:
+            log_f.close()
+            _local.log_file = None
 
 
 def _unique_branches(runs: list) -> list[tuple[str, str]]:
@@ -218,7 +240,8 @@ def _unique_branches(runs: list) -> list[tuple[str, str]]:
 
 
 def install_all(config: Config,
-                repos_dir: Path) -> dict[tuple[str, str], Path]:
+                repos_dir: Path,
+                logs_dir: Path | None = None) -> dict[tuple[str, str], Path]:
     """Build all unique branches, in parallel when possible.
 
     Returns mapping from (branch, commit) -> repo_dir.
@@ -234,7 +257,8 @@ def install_all(config: Config,
     if len(unique) == 1:
         branch, commit = unique[0]
         repo_dir = _install_one(repo_url, build, branch, commit,
-                                repos_dir, max_jobs=max_jobs)
+                                repos_dir, max_jobs=max_jobs,
+                                logs_dir=logs_dir)
         return {(branch, commit): repo_dir}
 
     # Parallel builds
@@ -243,7 +267,8 @@ def install_all(config: Config,
         futures = {
             pool.submit(_install_one, repo_url, build, branch, commit,
                         repos_dir, jobs_per_build,
-                        builder_id=i + 1): (branch, commit)
+                        builder_id=i + 1,
+                        logs_dir=logs_dir): (branch, commit)
             for i, (branch, commit) in enumerate(unique)
         }
         for future in as_completed(futures):
