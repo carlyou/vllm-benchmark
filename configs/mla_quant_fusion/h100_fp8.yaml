@@ -3,7 +3,7 @@ project:
   model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
 
 build:
-  use_precompiled: false
+  use_precompiled: true
   prebuilt_flash_attn: true
 
 # H100: SM 90, FlashAttnMLA backend (UNIFORM_BATCH cudagraph support).
