@@ -4,7 +4,6 @@ project:
 
 build:
   cuda_arch: "12.1"
-  prebuilt_flash_attn: false
 
 server:
   gpu_memory_utilization: 0.8

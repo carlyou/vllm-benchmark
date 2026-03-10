@@ -25,7 +25,7 @@ class ProjectConfig:
 @dataclass
 class BuildConfig:
     use_precompiled: bool = True
-    prebuilt_flash_attn: bool = True
+    install_flash_attn: bool = True
     cuda_arch: str | None = None
     max_jobs: int = 16
     torch_index: str = "https://download.pytorch.org/whl/cu130"

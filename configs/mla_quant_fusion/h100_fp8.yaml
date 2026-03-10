@@ -4,7 +4,6 @@ project:
 
 build:
   use_precompiled: true
-  prebuilt_flash_attn: true
 
 # H100: SM 90, FlashAttnMLA backend (UNIFORM_BATCH cudagraph support).
 # fuse_attn_quant auto-sets FULL, which resolves to FULL_DECODE_ONLY.

@@ -125,7 +125,7 @@ def _current_build_state(repo_dir: Path, build: BuildConfig) -> dict:
         "commit": head,
         "use_precompiled": build.use_precompiled,
         "cuda_arch": build.cuda_arch or "",
-        "prebuilt_flash_attn": build.prebuilt_flash_attn,
+        "install_flash_attn": build.install_flash_attn,
     }
 
 
@@ -162,7 +162,7 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
             _run(uv_pip + lines)
 
     # Optionally install flash-attn
-    if build.prebuilt_flash_attn:
+    if build.install_flash_attn:
         _log("Installing flash-attn (+ build deps)...")
         # flash-attn doesn't declare all build deps; install them first
         _run(uv_pip + ["psutil", "packaging", "ninja"], check=False)

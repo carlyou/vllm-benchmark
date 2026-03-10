@@ -4,7 +4,6 @@ project:
 
 build:
   use_precompiled: false
-  prebuilt_flash_attn: true
 
 server:
   enforce_eager: true

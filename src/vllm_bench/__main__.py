@@ -29,7 +29,7 @@ def _print_banner(config: Config) -> None:
     print(f"Input len:   {bnch.input_len}")
     print(f"Output len:  {bnch.output_len}")
     print(f"Precompiled: {bld.use_precompiled}")
-    print(f"Prebuilt FA: {bld.prebuilt_flash_attn}")
+    print(f"Flash-attn:  {bld.install_flash_attn}")
     if bld.cuda_arch:
         print(f"CUDA arch:   {bld.cuda_arch}")
     print(f"Work dir:    {proj.work_dir}")
