@@ -56,15 +56,22 @@ def _require_builds(config: Config) -> list[ResolvedRun]:
     return resolved
 
 
-def build(config: Config) -> Path:
+def _make_timestamp() -> str:
+    return datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def _logs_dir(config: Config, phase: str, timestamp: str) -> Path:
+    work_dir = Path(config.project.work_dir)
+    name = config.project.name.replace("/", "-")
+    return work_dir / "logs" / name / f"{phase}-{timestamp}"
+
+
+def build(config: Config, timestamp: str | None = None) -> Path:
     """Clone and build all unique branches. Returns repos_dir."""
     repos_dir = repos_dir_for(config)
     repos_dir.mkdir(parents=True, exist_ok=True)
 
-    work_dir = Path(config.project.work_dir)
-    name = config.project.name.replace("/", "-")
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    logs_dir = work_dir / "logs" / f"{name}-build-{timestamp}"
+    logs_dir = _logs_dir(config, "build", timestamp or _make_timestamp())
 
     install_all(config, repos_dir, logs_dir=logs_dir)
     print(f"Build logs in: {logs_dir}/")
@@ -85,17 +92,14 @@ def _compile_one(resolved: ResolvedRun, config: Config,
     return resolved.label
 
 
-def serve(config: Config) -> None:
+def serve(config: Config, timestamp: str | None = None) -> None:
     """Start, compile CUDA graphs, sanity check, and stop servers.
 
     When server.parallel_compile > 1, all servers compile concurrently
     on auto-assigned ports (base_port + offset per run).
     """
     resolved_runs = _require_builds(config)
-    work_dir = Path(config.project.work_dir)
-    name = config.project.name.replace("/", "-")
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    logs_dir = work_dir / "logs" / f"{name}-serve-{timestamp}"
+    logs_dir = _logs_dir(config, "compile", timestamp or _make_timestamp())
     logs_dir.mkdir(parents=True, exist_ok=True)
     base_port = config.server.port
 
@@ -140,17 +144,15 @@ def serve(config: Config) -> None:
     print("All servers compiled and verified.")
 
 
-def _setup_run_dirs(config: Config) -> tuple[Path, Path]:
+def _setup_run_dirs(config: Config,
+                    timestamp: str | None = None) -> tuple[Path, Path]:
     """Create results and logs directories for a benchmark run."""
+    ts = timestamp or _make_timestamp()
     work_dir = Path(config.project.work_dir)
-
-    # Use project name (e.g. "mla_quant_fusion/h100_fp8") sanitized for path
     name = config.project.name.replace("/", "-")
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_id = f"{name}-{timestamp}"
 
-    results_dir = work_dir / "results" / run_id
-    logs_dir = work_dir / "logs" / run_id
+    results_dir = work_dir / "results" / name / f"bench-{ts}"
+    logs_dir = _logs_dir(config, "bench", ts)
 
     results_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -205,13 +207,13 @@ def _execute_benchmark(resolved: ResolvedRun, config: Config,
     return outfile
 
 
-def bench(config: Config) -> dict[str, Path]:
+def bench(config: Config, timestamp: str | None = None) -> dict[str, Path]:
     """Run benchmarks assuming builds already exist.
 
     Returns mapping of label -> result file path.
     """
     resolved_runs = _require_builds(config)
-    results_dir, logs_dir = _setup_run_dirs(config)
+    results_dir, logs_dir = _setup_run_dirs(config, timestamp)
 
     # Save config for reproducibility
     if config.config_path and config.config_path.exists():
@@ -242,7 +244,8 @@ def bench(config: Config) -> dict[str, Path]:
 
 def run_all(config: Config) -> dict[str, Path]:
     """Build all branches, optionally pre-compile servers, then benchmark."""
-    build(config)
+    ts = _make_timestamp()
+    build(config, timestamp=ts)
     if config.server.parallel_compile > 1:
-        serve(config)
-    return bench(config)
+        serve(config, timestamp=ts)
+    return bench(config, timestamp=ts)

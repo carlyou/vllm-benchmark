@@ -168,11 +168,12 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
     venv_python = str(repo_dir / ".venv" / "bin" / "python")
     uv_pip = ["uv", "pip", "install", "--python", venv_python]
 
-    # Install torch + torchvision (transformers imports torchvision).
-    # Use --index-url (not --extra-index-url) so both packages resolve
-    # from the CUDA wheel index, ensuring compatible builds.
-    ctx.log("Installing torch + torchvision...")
-    _run(uv_pip + ["torch", "torchvision",
+    # Install torch from CUDA wheel index.
+    # NOTE: Do NOT install torchvision — on aarch64 the cu130 index lacks
+    # wheels, and the PyPI CPU fallback crashes at import time.  Transformers
+    # gracefully handles a missing torchvision; a broken one is fatal.
+    ctx.log("Installing torch...")
+    _run(uv_pip + ["torch",
                     "--index-url", build.torch_index], ctx=ctx)
 
     # Install build requirements (excluding torch which we just installed)
