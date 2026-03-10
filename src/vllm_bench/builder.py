@@ -167,55 +167,8 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
 
     venv_python = str(repo_dir / ".venv" / "bin" / "python")
     uv_pip = ["uv", "pip", "install", "--python", venv_python]
-
-    # Install torch from CUDA wheel index.
-    # NOTE: Do NOT install torchvision — on aarch64 the cu130 index lacks
-    # wheels, and the PyPI CPU fallback crashes at import time.  Transformers
-    # gracefully handles a missing torchvision; a broken one is fatal.
-    ctx.log("Installing torch...")
-    _run(uv_pip + ["torch",
-                    "--index-url", build.torch_index], ctx=ctx)
-
-    # Install build requirements (excluding torch which we just installed)
-    build_reqs = repo_dir / "requirements" / "build.txt"
-    if build_reqs.exists():
-        lines = []
-        for raw in build_reqs.read_text().splitlines():
-            line = raw.split("#")[0].strip()  # strip inline comments
-            if line and not line.startswith("torch=="):
-                lines.append(line)
-        if lines:
-            _run(uv_pip + lines, ctx=ctx)
-
-    # Optionally install flash-attn
-    if build.install_flash_attn:
-        ctx.log("Installing flash-attn (+ build deps)...")
-        # flash-attn doesn't declare all build deps; install them first
-        _run(uv_pip + ["psutil", "packaging", "ninja"],
-             check=False, ctx=ctx)
-        result = _run(uv_pip + ["flash-attn", "--no-build-isolation"],
-                      check=False, ctx=ctx)
-        if result.returncode != 0:
-            ctx.log("WARNING: flash-attn install failed, skipping.")
-
-    # Build vllm
     jobs = max_jobs or build.max_jobs
     env: dict[str, str] = {"MAX_JOBS": str(jobs)}
-
-    if build.use_precompiled:
-        ctx.log(f"Installing vllm (precompiled, "
-                f"HEAD={current_state['commit'][:12]})...")
-        env["VLLM_USE_PRECOMPILED"] = "1"
-    else:
-        ctx.log(f"Building vllm from source "
-                f"(HEAD={current_state['commit'][:12]})...")
-        if build.cuda_arch:
-            env["TORCH_CUDA_ARCH_LIST"] = build.cuda_arch
-            cmake_arch = build.cuda_arch.replace(".", "")
-            cmake_args = os.environ.get("CMAKE_ARGS", "")
-            env["CMAKE_ARGS"] = (
-                f"{cmake_args} -DCMAKE_CUDA_ARCHITECTURES={cmake_arch}"
-            )
 
     # Pass through build env vars
     for var in ("VLLM_FLASH_ATTN_SRC_DIR", "VLLM_CUTLASS_SRC_DIR",
@@ -223,8 +176,54 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
         if os.environ.get(var):
             env[var] = os.environ[var]
 
-    _run(uv_pip + ["-e", ".", "--no-build-isolation"],
-         cwd=repo_dir, env=env, ctx=ctx)
+    if build.use_precompiled:
+        # Precompiled: single command, deps resolve from PyPI.
+        # https://docs.vllm.ai/en/latest/contributing/#developing
+        ctx.log(f"Installing vllm (precompiled, "
+                f"HEAD={current_state['commit'][:12]})...")
+        env["VLLM_USE_PRECOMPILED"] = "1"
+        _run(uv_pip + ["-e", "."], cwd=repo_dir, env=env, ctx=ctx)
+    else:
+        # Source build: install torch, build deps, then build vllm
+        # https://docs.vllm.ai/en/latest/contributing/#developing
+        ctx.log(f"Building vllm from source "
+                f"(HEAD={current_state['commit'][:12]})...")
+
+        # 1. Install torch + torchvision + torchaudio
+        _run(uv_pip + ["torch", "torchvision", "torchaudio",
+                        "--extra-index-url", build.torch_index], ctx=ctx)
+
+        # 2. Install build deps (minus torch)
+        build_reqs = repo_dir / "requirements" / "build.txt"
+        if build_reqs.exists():
+            lines = []
+            for raw in build_reqs.read_text().splitlines():
+                line = raw.split("#")[0].strip()
+                if line and not line.startswith("torch=="):
+                    lines.append(line)
+            if lines:
+                _run(uv_pip + lines, ctx=ctx)
+
+        # 3. Optionally install flash-attn
+        if build.install_flash_attn:
+            ctx.log("Installing flash-attn (+ build deps)...")
+            _run(uv_pip + ["psutil", "packaging", "ninja"],
+                 check=False, ctx=ctx)
+            result = _run(uv_pip + ["flash-attn", "--no-build-isolation"],
+                          check=False, ctx=ctx)
+            if result.returncode != 0:
+                ctx.log("WARNING: flash-attn install failed, skipping.")
+
+        # 4. Build & install vllm
+        if build.cuda_arch:
+            env["TORCH_CUDA_ARCH_LIST"] = build.cuda_arch
+            cmake_arch = build.cuda_arch.replace(".", "")
+            cmake_args = os.environ.get("CMAKE_ARGS", "")
+            env["CMAKE_ARGS"] = (
+                f"{cmake_args} -DCMAKE_CUDA_ARCHITECTURES={cmake_arch}"
+            )
+        _run(uv_pip + ["-e", ".", "--no-build-isolation"],
+             cwd=repo_dir, env=env, ctx=ctx)
 
     _write_build_state(repo_dir, current_state)
     ctx.log("Build complete.")
