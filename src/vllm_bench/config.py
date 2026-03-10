@@ -29,6 +29,7 @@ class BuildConfig:
     cuda_arch: str | None = None
     max_jobs: int = 16
     torch_index: str = "https://download.pytorch.org/whl/cu130"
+    parallel_build: int = 1
 
 
 @dataclass

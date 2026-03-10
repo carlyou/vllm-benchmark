@@ -252,32 +252,36 @@ def install_all(config: Config,
     Returns mapping from (branch, commit) -> repo_dir.
     """
     unique = _unique_branches(config.runs)
-    print(f"Installing {len(unique)} unique branch(es)...")
-
     max_jobs = config.build.max_jobs
-    jobs_per_build = max(1, max_jobs // max(1, len(unique)))
     repo_url = config.project.repo
     build = config.build
+    workers = min(config.build.parallel_build, len(unique))
 
-    if len(unique) == 1:
-        branch, commit = unique[0]
+    if workers > 1 and len(unique) > 1:
+        jobs_per_build = max(1, max_jobs // workers)
+        print(f"Installing {len(unique)} unique branch(es) "
+              f"({workers} parallel)...")
+        results: dict[tuple[str, str], Path] = {}
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(_install_one, repo_url, build, branch, commit,
+                            repos_dir, jobs_per_build,
+                            builder_id=i + 1,
+                            logs_dir=logs_dir): (branch, commit)
+                for i, (branch, commit) in enumerate(unique)
+            }
+            for future in as_completed(futures):
+                key = futures[future]
+                results[key] = future.result()
+        return results
+
+    # Sequential builds
+    print(f"Installing {len(unique)} unique branch(es)...")
+    results: dict[tuple[str, str], Path] = {}
+    for i, (branch, commit) in enumerate(unique):
         repo_dir = _install_one(repo_url, build, branch, commit,
                                 repos_dir, max_jobs=max_jobs,
+                                builder_id=i + 1 if len(unique) > 1 else 0,
                                 logs_dir=logs_dir)
-        return {(branch, commit): repo_dir}
-
-    # Parallel builds
-    results: dict[tuple[str, str], Path] = {}
-    with ProcessPoolExecutor(max_workers=len(unique)) as pool:
-        futures = {
-            pool.submit(_install_one, repo_url, build, branch, commit,
-                        repos_dir, jobs_per_build,
-                        builder_id=i + 1,
-                        logs_dir=logs_dir): (branch, commit)
-            for i, (branch, commit) in enumerate(unique)
-        }
-        for future in as_completed(futures):
-            key = futures[future]
-            results[key] = future.result()
-
+        results[(branch, commit)] = repo_dir
     return results
