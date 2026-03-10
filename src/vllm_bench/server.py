@@ -188,6 +188,7 @@ class Server:
         self._log(f"{'─' * 46}")
 
         serve_cmd = self._build_serve_cmd()
+        self._log(f"$ {' '.join(serve_cmd)}")
 
         log_file = open(self.log_path, "w")
         self._proc = subprocess.Popen(

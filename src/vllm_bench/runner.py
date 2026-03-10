@@ -160,9 +160,6 @@ def _execute_benchmark(repo_dir: Path, config: Config,
     outfile = results_dir / f"{run.label}.txt"
     venv_activate = repo_dir / ".venv" / "bin" / "activate"
 
-    print(f"{prefix}Running vllm bench serve ({bench.num_prompts} prompts)...",
-          flush=True)
-
     cmd = (
         f"source {venv_activate} && "
         f"vllm bench serve "
@@ -175,6 +172,12 @@ def _execute_benchmark(repo_dir: Path, config: Config,
         f"--random-output-len {bench.output_len} "
         f"--ignore-eos"
     )
+
+    print(f"{prefix}$ vllm bench serve --model {config.project.model} "
+          f"--port {srv.port} --num-prompts {bench.num_prompts} "
+          f"--random-input-len {bench.input_len} "
+          f"--random-output-len {bench.output_len}",
+          flush=True)
 
     with open(outfile, "w") as out_f:
         proc = subprocess.Popen(

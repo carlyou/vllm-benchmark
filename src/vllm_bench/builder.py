@@ -51,6 +51,10 @@ def _run(cmd: list[str], cwd: Path | None = None, env: dict | None = None,
         merged_env = {**os.environ, **env}
     prefix = _prefix()
     log_f = _log_file()
+    cmd_str = " ".join(cmd)
+    print(f"{prefix}$ {cmd_str}", flush=True)
+    if log_f:
+        log_f.write(f"$ {cmd_str}\n")
     if prefix or log_f:
         # Capture output for prefixing and/or logging to file
         result = subprocess.run(
@@ -157,14 +161,15 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
         if lines:
             _run(uv_pip + lines)
 
-    # Optionally install prebuilt flash-attn
+    # Optionally install flash-attn
     if build.prebuilt_flash_attn:
-        _log("Installing prebuilt flash-attn wheel...")
+        _log("Installing flash-attn (+ build deps)...")
+        # flash-attn doesn't declare all build deps; install them first
+        _run(uv_pip + ["psutil", "packaging", "ninja"], check=False)
         result = _run(uv_pip + ["flash-attn", "--no-build-isolation"],
                        check=False)
         if result.returncode != 0:
-            _log("WARNING: flash-attn install failed (no prebuilt wheel?), "
-                 "skipping.")
+            _log("WARNING: flash-attn install failed, skipping.")
 
     # Build vllm
     jobs = max_jobs or build.max_jobs
