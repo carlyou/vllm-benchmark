@@ -168,9 +168,9 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
     venv_python = str(repo_dir / ".venv" / "bin" / "python")
     uv_pip = ["uv", "pip", "install", "--python", venv_python]
 
-    # Install torch
+    # Install torch + torchvision (transformers imports torchvision)
     ctx.log("Installing torch + build deps...")
-    _run(uv_pip + ["torch",
+    _run(uv_pip + ["torch", "torchvision",
                     "--extra-index-url", build.torch_index], ctx=ctx)
 
     # Install build requirements (excluding torch which we just installed)
