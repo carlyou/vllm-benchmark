@@ -6,10 +6,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
+from pathlib import Path
 
 from .config import Config, load_config
-from .runner import bench, build, run_all, serve
+from .runner import bench, build, repos_dir_for, run_all, serve
 
 
 def _print_banner(config: Config) -> None:
@@ -105,10 +107,22 @@ def main() -> None:
     p_run.add_argument("--port", type=int, default=None)
     p_run.add_argument("--max-jobs", type=int, default=None)
 
+    # -- clean --
+    p_clean = sub.add_parser("clean",
+                             help="Remove caches that can cause stale builds")
+    p_clean.add_argument("config", nargs="?", default=None,
+                         help="Config YAML (also cleans venvs for its runs)")
+    p_clean.add_argument("--all", action="store_true",
+                         help="Remove everything including model cache")
+
     args = parser.parse_args()
 
     if args.command is None:
         parser.print_help()
+        return
+
+    if args.command == "clean":
+        _clean(args)
         return
 
     config = load_config(
@@ -128,6 +142,59 @@ def main() -> None:
         bench(config)
     else:
         run_all(config)
+
+
+# ── clean ────────────────────────────────────────────────────────────
+
+_SYSTEM_CACHES = [
+    ("flashinfer JIT", Path.home() / ".cache" / "flashinfer"),
+    ("torch extensions", Path.home() / ".cache" / "torch_extensions"),
+    ("vllm compilation", Path.home() / ".cache" / "vllm"),
+    ("triton", Path.home() / ".triton" / "cache"),
+]
+
+_MODEL_CACHES = [
+    ("huggingface models", Path.home() / ".cache" / "huggingface"),
+]
+
+
+def _clean(args: argparse.Namespace) -> None:
+    """Remove caches that can cause stale/broken builds."""
+    removed = []
+
+    # System caches (always)
+    caches = list(_SYSTEM_CACHES)
+    if args.all:
+        caches += _MODEL_CACHES
+
+    for label, path in caches:
+        if path.exists():
+            size = sum(f.stat().st_size for f in path.rglob("*")
+                       if f.is_file()) / (1024 * 1024)
+            shutil.rmtree(path)
+            removed.append(f"  {label}: {path} ({size:.0f} MB)")
+
+    # Config-specific: clean venvs and build state
+    if args.config:
+        config = load_config(args.config)
+        repos_dir = repos_dir_for(config)
+        from .builder import branch_to_dir
+        for run in config.runs:
+            d = repos_dir / branch_to_dir(run.branch, run.commit)
+            venv = d / ".venv"
+            state = d / ".build_state.json"
+            if venv.exists():
+                shutil.rmtree(venv)
+                removed.append(f"  venv: {venv}")
+            if state.exists():
+                state.unlink()
+                removed.append(f"  build state: {state}")
+
+    if removed:
+        print("Cleaned:")
+        print("\n".join(removed))
+    else:
+        print("Nothing to clean.")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
 import os
 import subprocess
 import sys
@@ -36,6 +37,13 @@ def branch_to_dir(branch: str, commit: str = "") -> str:
     if commit:
         d = f"{d}-{commit[:8]}"
     return d
+
+
+def _resolve_jobs(value: float) -> int:
+    """Resolve max_jobs: <=1 treated as fraction of CPU cores, >1 as absolute."""
+    if value <= 1:
+        return max(1, int(multiprocessing.cpu_count() * value))
+    return int(value)
 
 
 def _run(cmd: list[str], cwd: Path | None = None, env: dict | None = None,
@@ -87,6 +95,10 @@ def clone_or_update(repo_url: str, branch: str, commit: str,
     if not repo_dir.exists():
         ctx.log(f"Cloning {repo_url} -> {repo_dir}")
         _run(["git", "clone", repo_url, str(repo_dir)], ctx=ctx)
+    else:
+        # Ensure origin matches the configured repo URL
+        _run(["git", "remote", "set-url", "origin", repo_url],
+             cwd=repo_dir, ctx=ctx)
 
     ctx.log(f"Fetching {branch}...")
     _run(["git", "fetch", "origin", branch], cwd=repo_dir, ctx=ctx)
@@ -167,7 +179,7 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
 
     venv_python = str(repo_dir / ".venv" / "bin" / "python")
     uv_pip = ["uv", "pip", "install", "--python", venv_python]
-    jobs = max_jobs or build.max_jobs
+    jobs = _resolve_jobs(max_jobs or build.max_jobs)
     env: dict[str, str] = {"MAX_JOBS": str(jobs)}
 
     # Pass through build env vars
@@ -291,7 +303,7 @@ def install_all(config: Config,
     Returns mapping from (branch, commit) -> repo_dir.
     """
     unique = _unique_builds(config)
-    max_jobs = config.build.max_jobs
+    max_jobs = _resolve_jobs(config.build.max_jobs)
     repo_url = config.project.repo
     workers = min(config.build.parallel_build, len(unique))
 

@@ -3,7 +3,8 @@ project:
   model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
 
 build:
-  use_precompiled: false
+  use_precompiled: true
+  max_jobs: 0.8
 
 server:
   enforce_eager: true

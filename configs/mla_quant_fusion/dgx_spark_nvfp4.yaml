@@ -4,6 +4,7 @@ project:
 
 build:
   cuda_arch: "12.1"
+  max_jobs: 0.8
 
 server:
   gpu_memory_utilization: 0.8

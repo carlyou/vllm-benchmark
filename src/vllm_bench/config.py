@@ -27,7 +27,7 @@ class BuildConfig:
     use_precompiled: bool = True
     install_flash_attn: bool = False
     cuda_arch: str | None = None
-    max_jobs: int = 16
+    max_jobs: float = 1.0  # <=1: fraction of CPU cores, >1: absolute count
     torch_index: str = "https://download.pytorch.org/whl/cu130"
     parallel_build: int = 1
 
