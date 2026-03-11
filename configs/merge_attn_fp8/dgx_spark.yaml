@@ -3,9 +3,13 @@ project:
   model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
 
 build:
+  cuda_arch: "12.1"
   max_jobs: 0.8
 
-# H100: SM 90, FP8 MLA model.
+server:
+  gpu_memory_utilization: 0.8
+
+# DGX Spark: GB10 (sm_121).
 # Smoke test: verify fuse-fp8-quant-merge-attn-states branch performs on par
 # with main. The fused kernel is not yet wired into any caller.
 # PR: https://github.com/vllm-project/vllm/pull/36518

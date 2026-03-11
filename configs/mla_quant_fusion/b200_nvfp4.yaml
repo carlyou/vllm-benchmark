@@ -5,29 +5,28 @@ project:
 build:
   max_jobs: 0.8
 
-# B200: SM 100, NVFP4 quantized DeepSeek-V2-Lite (~9.4 GB).
-# Tests MLAAttentionNvfp4QuantPattern fusion.
-
 bench:
   request_rate: 50
 
-runs:
-  - label: main_warmup
-    branch: main
+# B200: SM 100, NVFP4 quantized DeepSeek-V2-Lite (~9.4 GB).
+# Tests MLAAttentionNvfp4QuantPattern fusion.
 
-  - label: feature_fuse_off
-    branch: feat--mla-static-quant-fusion
-    server:
-      compilation_config:
-        pass_config:
-          fuse_attn_quant: false
+branches:
+  main:
+    runs:
+      - label: main_warmup
+      - label: main_baseline
 
-  - label: feature_fuse_on
-    branch: feat--mla-static-quant-fusion
-    server:
-      compilation_config:
-        pass_config:
-          fuse_attn_quant: true
+  feat--mla-static-quant-fusion:
+    runs:
+      - label: feature_fuse_off
+        server:
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: false
 
-  - label: main_baseline
-    branch: main
+      - label: feature_fuse_on
+        server:
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: true

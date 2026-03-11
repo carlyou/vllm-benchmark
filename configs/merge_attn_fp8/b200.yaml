@@ -10,12 +10,14 @@ build:
 # with main. The fused kernel is not yet wired into any caller.
 # PR: https://github.com/vllm-project/vllm/pull/36518
 
-runs:
-  - label: main_warmup
-    branch: main
+branches:
+  main:
+    runs:
+      - label: main_warmup
+      - label: main_baseline
 
-  - label: main_baseline
-    branch: main
-
-  - label: feature
-    branch: fuse-fp8-quant-merge-attn-states
+  fuse-fp8-quant-merge-attn-states:
+    build:
+      use_precompiled: false
+    runs:
+      - label: feature

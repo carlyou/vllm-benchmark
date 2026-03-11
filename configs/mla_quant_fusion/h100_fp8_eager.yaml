@@ -9,25 +9,24 @@ build:
 server:
   enforce_eager: true
 
-# H100: SM 90, eager mode (no torch.compile, no cudagraphs).
-# Cross-check to isolate compile/cudagraph effects from branch differences.
-
 bench:
   request_rate: 50
 
-runs:
-  - label: main_warmup
-    branch: main
+# H100: SM 90, eager mode (no torch.compile, no cudagraphs).
+# Cross-check to isolate compile/cudagraph effects from branch differences.
 
-  - label: feature_fuse_off_eager
-    branch: feat--mla-static-quant-fusion
+branches:
+  main:
+    runs:
+      - label: main_warmup
+      - label: main_eager
 
-  - label: feature_fuse_on_eager
-    branch: feat--mla-static-quant-fusion
-    server:
-      compilation_config:
-        pass_config:
-          fuse_attn_quant: true
+  feat--mla-static-quant-fusion:
+    runs:
+      - label: feature_fuse_off_eager
 
-  - label: main_eager
-    branch: main
+      - label: feature_fuse_on_eager
+        server:
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: true

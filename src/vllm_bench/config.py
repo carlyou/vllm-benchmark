@@ -54,12 +54,21 @@ class BenchConfig:
 @dataclass
 class RunConfig:
     label: str
-    branch: str
+    branch: str  # set automatically from parent branch key
     commit: str = ""
-    # Per-run overrides (merged with top-level via Config.effective_*)
+    # Per-run overrides (server/bench only; build is set at branch level)
+    server: dict = field(default_factory=dict)
+    bench: dict = field(default_factory=dict)
+
+
+@dataclass
+class BranchConfig:
+    """Per-branch config: build overrides + runs."""
     build: dict = field(default_factory=dict)
     server: dict = field(default_factory=dict)
     bench: dict = field(default_factory=dict)
+    commit: str = ""
+    runs: list[RunConfig] = field(default_factory=list)
 
 
 def _overlay(base, overrides: dict, cls):
@@ -84,25 +93,33 @@ class Config:
     build: BuildConfig = field(default_factory=BuildConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
     bench: BenchConfig = field(default_factory=BenchConfig)
+    branches: dict[str, BranchConfig] = field(default_factory=dict)
     runs: list[RunConfig] = field(default_factory=list)
     config_path: Path | None = field(default=None, repr=False)
 
+    def _branch_config(self, run: RunConfig) -> BranchConfig:
+        return self.branches.get(run.branch, BranchConfig())
+
     def effective_build(self, run: RunConfig) -> BuildConfig:
-        """Top-level build config with per-run overrides applied."""
-        return _overlay(self.build, run.build, BuildConfig)
+        """Global build + branch-level overrides. (No run-level build.)"""
+        return _overlay(self.build, self._branch_config(run).build, BuildConfig)
 
     def effective_server(self, run: RunConfig) -> ServerConfig:
-        """Top-level server config with per-run overrides applied."""
-        return _overlay(self.server, run.server, ServerConfig)
+        """Global -> branch -> run server config."""
+        base = _overlay(self.server, self._branch_config(run).server,
+                        ServerConfig)
+        return _overlay(base, run.server, ServerConfig)
 
     def effective_bench(self, run: RunConfig) -> BenchConfig:
-        """Top-level bench config with per-run overrides applied."""
-        return _overlay(self.bench, run.bench, BenchConfig)
+        """Global -> branch -> run bench config."""
+        base = _overlay(self.bench, self._branch_config(run).bench,
+                        BenchConfig)
+        return _overlay(base, run.bench, BenchConfig)
 
 
 # ── YAML loading ─────────────────────────────────────────────────────
 
-_SECTIONS = {"project", "build", "server", "bench", "runs"}
+_SECTIONS = {"project", "build", "server", "bench", "branches"}
 
 _SECTION_FIELDS = {
     "project": {f.name for f in dc_fields(ProjectConfig)},
@@ -134,30 +151,61 @@ def _build_section(cls, raw: dict, section_name: str):
     return cls(**filtered)
 
 
-_RUN_FIELDS = {"label", "branch", "commit", "build", "server", "bench"}
+_BRANCH_FIELDS = {"build", "server", "bench", "commit", "runs"}
+_RUN_FIELDS = {"label", "commit", "server", "bench"}
 
 
-def _parse_runs(raw_runs: list[dict]) -> list[RunConfig]:
-    runs = []
-    for i, r in enumerate(raw_runs):
-        unknown = set(r) - _RUN_FIELDS
+def _parse_branches(raw_branches: dict) -> tuple[dict[str, BranchConfig],
+                                                   list[RunConfig]]:
+    """Parse branches section, returning branch configs and flattened run list."""
+    branch_configs: dict[str, BranchConfig] = {}
+    all_runs: list[RunConfig] = []
+
+    for branch_name, raw in raw_branches.items():
+        if not isinstance(raw, dict):
+            raw = {}
+        unknown = set(raw) - _BRANCH_FIELDS
         if unknown:
             warnings.warn(
-                f"runs[{i}] ({r.get('label', '?')}): unknown key(s): "
+                f"branches[{branch_name!r}]: unknown key(s): "
                 f"{', '.join(sorted(unknown))!r}")
-        try:
-            runs.append(RunConfig(
-                label=r["label"],
-                branch=r["branch"],
-                commit=r.get("commit", ""),
-                build=r.get("build") or {},
-                server=r.get("server") or {},
-                bench=r.get("bench") or {},
-            ))
-        except KeyError as e:
-            raise ValueError(
-                f"runs[{i}]: missing required field {e}") from e
-    return runs
+
+        branch_commit = raw.get("commit", "")
+        raw_runs = raw.get("runs") or []
+        runs: list[RunConfig] = []
+        for i, r in enumerate(raw_runs):
+            if isinstance(r, str):
+                # Short form: just a label string
+                r = {"label": r}
+            run_unknown = set(r) - _RUN_FIELDS
+            if run_unknown:
+                warnings.warn(
+                    f"branches[{branch_name!r}].runs[{i}] "
+                    f"({r.get('label', '?')}): unknown key(s): "
+                    f"{', '.join(sorted(run_unknown))!r}")
+            try:
+                runs.append(RunConfig(
+                    label=r["label"],
+                    branch=branch_name,
+                    commit=r.get("commit", branch_commit),
+                    server=r.get("server") or {},
+                    bench=r.get("bench") or {},
+                ))
+            except KeyError as e:
+                raise ValueError(
+                    f"branches[{branch_name!r}].runs[{i}]: "
+                    f"missing required field {e}") from e
+
+        branch_configs[branch_name] = BranchConfig(
+            build=raw.get("build") or {},
+            server=raw.get("server") or {},
+            bench=raw.get("bench") or {},
+            commit=branch_commit,
+            runs=runs,
+        )
+        all_runs.extend(runs)
+
+    return branch_configs, all_runs
 
 
 def load_config(config_path: str, **overrides) -> Config:
@@ -186,7 +234,7 @@ def load_config(config_path: str, **overrides) -> Config:
     build = _build_section(BuildConfig, raw.get("build") or {}, "build")
     server = _build_section(ServerConfig, raw.get("server") or {}, "server")
     bench = _build_section(BenchConfig, raw.get("bench") or {}, "bench")
-    runs = _parse_runs(raw.get("runs") or [])
+    branches, runs = _parse_branches(raw.get("branches") or {})
 
     # CLI overrides (machine-local conveniences only)
     if overrides.get("port") is not None:
@@ -208,6 +256,7 @@ def load_config(config_path: str, **overrides) -> Config:
         build=build,
         server=server,
         bench=bench,
+        branches=branches,
         runs=runs,
         config_path=path,
     )
