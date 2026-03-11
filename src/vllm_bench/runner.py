@@ -8,7 +8,6 @@ import re
 import shutil
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -93,53 +92,21 @@ def _compile_one(resolved: ResolvedRun, config: Config,
 
 
 def serve(config: Config, timestamp: str | None = None) -> None:
-    """Start, compile CUDA graphs, sanity check, and stop servers.
+    """Start, compile CUDA graphs, sanity check, and stop each server sequentially.
 
-    When server.parallel_compile > 1, all servers compile concurrently
-    on auto-assigned ports (base_port + offset per run).
+    Sequential execution allows later runs to reuse compile/CUDA graph caches
+    from earlier runs.
     """
     resolved_runs = _require_builds(config)
     logs_dir = _logs_dir(config, "compile", timestamp or _make_timestamp())
     logs_dir.mkdir(parents=True, exist_ok=True)
-    base_port = config.server.port
 
-    workers = config.server.parallel_compile
     n_runs = len(resolved_runs)
-
-    if workers > 1 and n_runs > 1:
-        workers = min(workers, n_runs)
-        print(f"Compiling {n_runs} run(s) ({workers} parallel)...")
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {}
-            for i, resolved in enumerate(resolved_runs):
-                port = base_port + i
-                prefix = f"[serve {i + 1}] "
-                r = resolved.with_server(port=port)
-                futures[pool.submit(
-                    _compile_one, r, config, logs_dir,
-                    prefix=prefix, flush_jitter=i * 1.0,
-                )] = resolved.label
-            failed = []
-            for future in as_completed(futures):
-                label = futures[future]
-                try:
-                    future.result()
-                except Exception as e:
-                    failed.append((label, e))
-                    print(f"ERROR: Server for {label!r} failed: {e}",
-                          file=sys.stderr)
-            if failed:
-                labels = ", ".join(f"'{l}'" for l, _ in failed)
-                raise RuntimeError(
-                    f"{len(failed)} server(s) failed to compile: {labels}. "
-                    f"Try reducing server.parallel_compile")
-    else:
-        print(f"Compiling {n_runs} run(s)...")
-        for i, resolved in enumerate(resolved_runs):
-            port = base_port + i
-            prefix = f"[serve {i + 1}] "
-            r = resolved.with_server(port=port)
-            _compile_one(r, config, logs_dir, prefix=prefix)
+    print(f"Compiling {n_runs} run(s)...")
+    for i, resolved in enumerate(resolved_runs):
+        prefix = f"[serve {i + 1}] " if n_runs > 1 else ""
+        _compile_one(r=resolved, config=config, logs_dir=logs_dir,
+                     prefix=prefix)
 
     print("All servers compiled and verified.")
 
@@ -246,6 +213,4 @@ def run_all(config: Config) -> dict[str, Path]:
     """Build all branches, optionally pre-compile servers, then benchmark."""
     ts = _make_timestamp()
     build(config, timestamp=ts)
-    if config.server.parallel_compile > 1:
-        serve(config, timestamp=ts)
     return bench(config, timestamp=ts)

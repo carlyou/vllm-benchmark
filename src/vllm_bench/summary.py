@@ -19,6 +19,7 @@ from .resolved import ResolvedRun
 METRIC_SECTIONS: list[tuple[str | None, str, str]] = [
     (None, "Successful requests",        r"Successful requests:\s*([\d.]+)"),
     (None, "Failed requests",            r"Failed requests:\s*([\d.]+)"),
+    (None, "Request rate (RPS)",         r"Request rate configured \(RPS\):\s*([\d.]+)"),
     (None, "Benchmark duration (s)",     r"Benchmark duration \(s\):\s*([\d.]+)"),
     (None, "Total input tokens",         r"Total input tokens:\s*([\d.]+)"),
     (None, "Total generated tokens",     r"Total generated tokens:\s*([\d.]+)"),

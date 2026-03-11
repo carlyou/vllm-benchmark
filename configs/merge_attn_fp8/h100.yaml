@@ -1,0 +1,22 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
+
+build:
+  use_precompiled: true
+  max_jobs: 0.8
+
+# H100: SM 90, FP8 MLA model.
+# Smoke test: verify fuse-fp8-quant-merge-attn-states branch performs on par
+# with main. The fused kernel is not yet wired into any caller.
+# PR: https://github.com/vllm-project/vllm/pull/36518
+
+runs:
+  - label: main_warmup
+    branch: main
+
+  - label: main_baseline
+    branch: main
+
+  - label: feature
+    branch: fuse-fp8-quant-merge-attn-states

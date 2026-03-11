@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
-"""Clone, venv setup, and parallel vllm builds."""
+"""Clone, venv setup, and vllm builds."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import multiprocessing
 import os
 import subprocess
 import sys
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
@@ -298,34 +297,17 @@ def _unique_builds(config: Config) -> list[tuple[str, str, BuildConfig]]:
 def install_all(config: Config,
                 repos_dir: Path,
                 logs_dir: Path | None = None) -> dict[tuple[str, str], Path]:
-    """Build all unique branches, in parallel when possible.
+    """Build all unique branches sequentially.
+
+    Sequential execution allows later builds to reuse uv's package cache
+    from earlier builds.
 
     Returns mapping from (branch, commit) -> repo_dir.
     """
     unique = _unique_builds(config)
     max_jobs = _resolve_jobs(config.build.max_jobs)
     repo_url = config.project.repo
-    workers = min(config.build.parallel_build, len(unique))
 
-    if workers > 1 and len(unique) > 1:
-        jobs_per_build = max(1, max_jobs // workers)
-        print(f"Installing {len(unique)} unique branch(es) "
-              f"({workers} parallel)...")
-        results: dict[tuple[str, str], Path] = {}
-        with ProcessPoolExecutor(max_workers=workers) as pool:
-            futures = {
-                pool.submit(_install_one, repo_url, build_cfg, branch, commit,
-                            repos_dir, jobs_per_build,
-                            builder_id=i + 1,
-                            logs_dir=logs_dir): (branch, commit)
-                for i, (branch, commit, build_cfg) in enumerate(unique)
-            }
-            for future in as_completed(futures):
-                key = futures[future]
-                results[key] = future.result()
-        return results
-
-    # Sequential builds
     print(f"Installing {len(unique)} unique branch(es)...")
     results: dict[tuple[str, str], Path] = {}
     for i, (branch, commit, build_cfg) in enumerate(unique):

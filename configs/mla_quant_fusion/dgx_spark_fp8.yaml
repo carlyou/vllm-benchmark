@@ -9,6 +9,9 @@ build:
 server:
   gpu_memory_utilization: 0.8
 
+bench:
+  request_rate: 10
+
 runs:
   - label: main_baseline
     branch: main

@@ -29,7 +29,6 @@ class BuildConfig:
     cuda_arch: str | None = None
     max_jobs: float = 1.0  # <=1: fraction of CPU cores, >1: absolute count
     torch_index: str = "https://download.pytorch.org/whl/cu130"
-    parallel_build: int = 1
 
 
 @dataclass
@@ -41,7 +40,6 @@ class ServerConfig:
     port: int = 8000
     wait_timeout: int = 600
     compilation_config: dict | None = None
-    parallel_compile: int = 1
 
 
 @dataclass
