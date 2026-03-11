@@ -8,6 +8,9 @@ build:
 # B200: SM 100, NVFP4 quantized DeepSeek-V2-Lite (~9.4 GB).
 # Tests MLAAttentionNvfp4QuantPattern fusion.
 
+bench:
+  request_rate: 50
+
 runs:
   - label: main_warmup
     branch: main

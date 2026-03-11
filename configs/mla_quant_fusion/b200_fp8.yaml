@@ -8,6 +8,9 @@ build:
 # B200: SM 100, FlashInferMLA/CutlassMLA backends (UNIFORM_BATCH cudagraph support).
 # fuse_attn_quant auto-sets FULL, which resolves to FULL_DECODE_ONLY.
 
+bench:
+  request_rate: 50
+
 runs:
   - label: main_warmup
     branch: main

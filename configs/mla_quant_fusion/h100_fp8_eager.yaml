@@ -12,6 +12,9 @@ server:
 # H100: SM 90, eager mode (no torch.compile, no cudagraphs).
 # Cross-check to isolate compile/cudagraph effects from branch differences.
 
+bench:
+  request_rate: 50
+
 runs:
   - label: main_warmup
     branch: main

@@ -49,6 +49,7 @@ class BenchConfig:
     num_prompts: int = 1000
     input_len: int = 128
     output_len: int = 128
+    request_rate: str = "inf"
     warmup_prompts: int = 3
 
 

@@ -13,6 +13,9 @@ build:
 #   fuse_off: FULL_AND_PIECEWISE, FULL, NONE
 #   fuse_on:  FULL, NONE (piecewise incompatible with fusion)
 
+bench:
+  request_rate: 50
+
 runs:
   - label: warmup
     branch: feat--mla-static-quant-fusion
