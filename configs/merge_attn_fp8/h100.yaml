@@ -1,6 +1,7 @@
 project:
   repo: https://github.com/carlyou/vllm.git
   model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
+  build_parallelism: 3
 
 build:
   max_jobs: 0.8
@@ -12,8 +13,6 @@ build:
 
 branches:
   main:
-    build:
-      use_precompiled: false
     runs:
       - label: main_warmup
       - label: main_baseline
