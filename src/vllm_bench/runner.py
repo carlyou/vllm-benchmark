@@ -4,10 +4,12 @@
 
 from __future__ import annotations
 
+import random
 import re
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -91,22 +93,41 @@ def _compile_one(resolved: ResolvedRun, config: Config,
     return resolved.label
 
 
-def serve(config: Config, timestamp: str | None = None) -> None:
-    """Start, compile CUDA graphs, sanity check, and stop each server sequentially.
+def compile(config: Config, timestamp: str | None = None) -> None:
+    """Start, compile CUDA graphs, sanity check, and stop each server.
 
-    Sequential execution allows later runs to reuse compile/CUDA graph caches
-    from earlier runs.
+    Parallel when compile_parallelism > 1 (each server gets a unique port).
     """
     resolved_runs = _require_builds(config)
     logs_dir = _logs_dir(config, "compile", timestamp or _make_timestamp())
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     n_runs = len(resolved_runs)
-    print(f"Compiling {n_runs} run(s)...")
-    for i, resolved in enumerate(resolved_runs):
-        prefix = f"[serve {i + 1}] " if n_runs > 1 else ""
-        _compile_one(r=resolved, config=config, logs_dir=logs_dir,
-                     prefix=prefix)
+    parallelism = config.project.compile_parallelism
+
+    if parallelism <= 1 or n_runs <= 1:
+        print(f"Compiling {n_runs} run(s)...")
+        for i, resolved in enumerate(resolved_runs):
+            prefix = f"[compile{i + 1}] " if n_runs > 1 else ""
+            _compile_one(resolved=resolved, config=config, logs_dir=logs_dir,
+                         prefix=prefix)
+    else:
+        workers = min(parallelism, n_runs)
+        print(f"Compiling {n_runs} run(s) ({workers} parallel)...")
+        base_port = config.server.port
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {}
+            for i, resolved in enumerate(resolved_runs):
+                r = resolved.with_server(port=base_port + i)
+                jitter = random.uniform(0, 0.3) * i
+                fut = pool.submit(
+                    _compile_one, resolved=r, config=config,
+                    logs_dir=logs_dir,
+                    prefix=f"[compile{i + 1}] ",
+                    flush_jitter=jitter)
+                futures[fut] = resolved.label
+            for fut in as_completed(futures):
+                fut.result()
 
     print("All servers compiled and verified.")
 
@@ -213,4 +234,6 @@ def run_all(config: Config) -> dict[str, Path]:
     """Build all branches, optionally pre-compile servers, then benchmark."""
     ts = _make_timestamp()
     build(config, timestamp=ts)
+    if config.project.compile_parallelism > 1:
+        compile(config, timestamp=ts)
     return bench(config, timestamp=ts)

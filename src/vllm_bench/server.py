@@ -225,11 +225,20 @@ class Server:
         serve_cmd = self._build_serve_cmd()
         self._log(f"$ {' '.join(serve_cmd)}")
 
+        env = None
+        if self.config.project.isolate_flashinfer_cache:
+            # Per-venv flashinfer JIT cache to prevent cross-venv symbol
+            # conflicts (e.g. cu12 vs cu13 compiled .so files).
+            env = {**os.environ,
+                   "FLASHINFER_WORKSPACE_BASE":
+                       str(self.repo_dir / ".flashinfer")}
+
         self._log_fh = open(self.log_path, "w")
         try:
             self._proc = subprocess.Popen(
                 serve_cmd,
                 cwd=self.repo_dir,
+                env=env,
                 stdout=self._log_fh,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,

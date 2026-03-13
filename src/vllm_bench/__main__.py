@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from .config import Config, load_config
-from .runner import bench, build, repos_dir_for, run_all, serve
+from .runner import bench, build, compile, repos_dir_for, run_all
 
 
 def _print_banner(config: Config) -> None:
@@ -70,6 +70,7 @@ def _filter_runs(config: Config, labels: list[str] | None) -> Config:
         build=config.build,
         server=config.server,
         bench=config.bench,
+        branches=config.branches,
         runs=filtered,
         config_path=config.config_path,
     )
@@ -137,7 +138,7 @@ def main() -> None:
     if args.command == "build":
         build(config)
     elif args.command == "compile":
-        serve(config)
+        compile(config)
     elif args.command == "bench":
         bench(config)
     else:

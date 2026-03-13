@@ -7,8 +7,10 @@ from __future__ import annotations
 import json
 import multiprocessing
 import os
+import re
 import subprocess
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
@@ -160,6 +162,41 @@ def _build_identity(build: BuildConfig) -> dict:
     }
 
 
+def _check_cuda_version(repo_dir: Path, ctx: BuildContext) -> None:
+    """Verify torch's CUDA version matches the system CUDA major version.
+
+    Precompiled vllm wheels may resolve torch with cu128 (CUDA 12) even on
+    CUDA 13 systems, pulling nvidia-cublas-cu12 which can't initialize on
+    SM 100+ GPUs (e.g. B200).
+    """
+    venv_python = str(repo_dir / ".venv" / "bin" / "python")
+    try:
+        torch_cuda = subprocess.check_output(
+            [venv_python, "-c", "import torch; print(torch.version.cuda)"],
+            text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+        system_cuda = subprocess.check_output(
+            ["nvcc", "--version"], text=True, stderr=subprocess.DEVNULL,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return  # Can't check, skip
+
+    m = re.search(r"release (\d+)\.", system_cuda)
+    if not m:
+        return
+    system_major = m.group(1)
+    torch_major = torch_cuda.split(".")[0]
+
+    if system_major != torch_major:
+        raise RuntimeError(
+            f"CUDA version mismatch: torch has CUDA {torch_cuda} "
+            f"but system has CUDA {system_major}.x. "
+            f"This will cause cuBLAS initialization failures on this GPU. "
+            f"Fix: install torch with matching CUDA version, e.g.:\n"
+            f"  pip install torch --index-url "
+            f"https://download.pytorch.org/whl/cu{system_major}0")
+
+
 def build_vllm(repo_dir: Path, build: BuildConfig,
                max_jobs: int | None = None,
                ctx: BuildContext | None = None) -> None:
@@ -236,6 +273,9 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
         _run(uv_pip + ["-e", ".", "--no-build-isolation"],
              cwd=repo_dir, env=env, ctx=ctx)
 
+    # Verify torch CUDA version matches system CUDA major version
+    _check_cuda_version(repo_dir, ctx)
+
     _write_build_state(repo_dir, current_state)
     ctx.log("Build complete.")
 
@@ -297,23 +337,40 @@ def _unique_builds(config: Config) -> list[tuple[str, str, BuildConfig]]:
 def install_all(config: Config,
                 repos_dir: Path,
                 logs_dir: Path | None = None) -> dict[tuple[str, str], Path]:
-    """Build all unique branches sequentially.
-
-    Sequential execution allows later builds to reuse uv's package cache
-    from earlier builds.
+    """Build all unique branches. Parallel when build_parallelism > 1.
 
     Returns mapping from (branch, commit) -> repo_dir.
     """
     unique = _unique_builds(config)
     max_jobs = _resolve_jobs(config.build.max_jobs)
     repo_url = config.project.repo
+    parallelism = config.project.build_parallelism
 
-    print(f"Installing {len(unique)} unique branch(es)...")
+    n = len(unique)
+    print(f"Installing {n} unique branch(es)"
+          f"{f' ({parallelism} parallel)' if parallelism > 1 else ''}...")
+
     results: dict[tuple[str, str], Path] = {}
-    for i, (branch, commit, build_cfg) in enumerate(unique):
-        repo_dir = _install_one(repo_url, build_cfg, branch, commit,
-                                repos_dir, max_jobs=max_jobs,
-                                builder_id=i + 1 if len(unique) > 1 else 0,
-                                logs_dir=logs_dir)
-        results[(branch, commit)] = repo_dir
+
+    if parallelism <= 1 or n <= 1:
+        for i, (branch, commit, build_cfg) in enumerate(unique):
+            repo_dir = _install_one(repo_url, build_cfg, branch, commit,
+                                    repos_dir, max_jobs=max_jobs,
+                                    builder_id=i + 1 if n > 1 else 0,
+                                    logs_dir=logs_dir)
+            results[(branch, commit)] = repo_dir
+    else:
+        workers = min(parallelism, n)
+        with ProcessPoolExecutor(max_workers=workers) as pool:
+            futures = {}
+            for i, (branch, commit, build_cfg) in enumerate(unique):
+                fut = pool.submit(
+                    _install_one, repo_url, build_cfg, branch, commit,
+                    repos_dir, max_jobs, builder_id=i + 1,
+                    logs_dir=logs_dir)
+                futures[fut] = (branch, commit)
+            for fut in as_completed(futures):
+                key = futures[fut]
+                results[key] = fut.result()
+
     return results

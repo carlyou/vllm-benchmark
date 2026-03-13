@@ -12,6 +12,8 @@ build:
 
 branches:
   main:
+    build:
+      use_precompiled: false
     runs:
       - label: main_warmup
       - label: main_baseline
@@ -21,3 +23,9 @@ branches:
       use_precompiled: false
     runs:
       - label: feature
+
+  fuse-fp8-quant-merge-attn-states-vec128:
+    build:
+      use_precompiled: false
+    runs:
+      - label: feature-vec128

@@ -20,6 +20,9 @@ class ProjectConfig:
     name: str = ""  # derived from config path: "project_dir/config_stem"
     description: str = ""
     work_dir: str = "/tmp/vllm-bench"
+    isolate_flashinfer_cache: bool = False  # per-venv flashinfer JIT cache
+    build_parallelism: int = 1   # concurrent branch builds (1 = sequential)
+    compile_parallelism: int = 1  # concurrent server startups for JIT/CUDA graphs
 
 
 @dataclass
