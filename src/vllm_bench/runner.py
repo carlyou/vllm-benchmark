@@ -37,10 +37,13 @@ def repos_dir_for(config: Config) -> Path:
     return work_dir / "repos" / owner_name
 
 
-def _require_builds(config: Config) -> list[ResolvedRun]:
-    """Validate that builds exist for all runs. Returns resolved runs."""
-    repos_dir = repos_dir_for(config)
-    resolved = resolve_runs(config, repos_dir)
+def _require_builds(config: Config,
+                    resolved: list[ResolvedRun] | None = None,
+                    ) -> list[ResolvedRun]:
+    """Validate that builds exist for runs. Returns resolved runs."""
+    if resolved is None:
+        repos_dir = repos_dir_for(config)
+        resolved = resolve_runs(config, repos_dir)
     for r in resolved:
         d = r.repo_dir
         if not (d / ".venv").exists():
@@ -304,13 +307,15 @@ def eval_(config: Config, timestamp: str | None = None) -> dict[str, Path]:
 
     Returns mapping of label -> result file path.
     """
-    resolved_runs = _require_builds(config)
-    eval_runs = [r for r in resolved_runs if r.eval.script]
+    repos_dir = repos_dir_for(config)
+    all_runs = resolve_runs(config, repos_dir)
+    eval_runs = [r for r in all_runs if r.eval.script]
 
     if not eval_runs:
         print("No runs have eval.script configured, skipping eval.")
         return {}
 
+    _require_builds(config, resolved=eval_runs)
     results_dir, logs_dir = _setup_eval_dirs(config, timestamp)
 
     # Save config for reproducibility
