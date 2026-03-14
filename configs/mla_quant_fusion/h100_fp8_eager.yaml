@@ -10,9 +10,6 @@ build:
 server:
   enforce_eager: true
 
-bench:
-  request_rate: 50
-
 # H100: SM 90, eager mode (no torch.compile, no cudagraphs).
 # Cross-check to isolate compile/cudagraph effects from branch differences.
 
@@ -25,6 +22,10 @@ branches:
   feat--mla-static-quant-fusion:
     runs:
       - label: feature_fuse_off_eager
+        server:
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: true
 
       - label: feature_fuse_on_eager
         server:

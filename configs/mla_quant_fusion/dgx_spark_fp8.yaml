@@ -9,9 +9,6 @@ build:
 server:
   gpu_memory_utilization: 0.8
 
-bench:
-  request_rate: 10
-
 # DGX Spark: GB10 (sm_121), TritonMLA backend only.
 # TritonMLA has _cudagraph_support=NEVER, so cudagraph_mode must be NONE
 # when fuse_attn_quant is enabled.

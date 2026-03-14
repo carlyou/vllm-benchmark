@@ -7,9 +7,6 @@ build:
   max_jobs: 0.8
   cuda_arch: "9.0"
 
-bench:
-  request_rate: 50
-
 # H100: SM 90, FlashAttnMLA backend (UNIFORM_BATCH cudagraph support).
 # fuse_attn_quant auto-sets FULL, which resolves to FULL_DECODE_ONLY.
 

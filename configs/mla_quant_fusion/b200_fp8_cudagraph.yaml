@@ -6,9 +6,6 @@ build:
   max_jobs: 0.8
   cuda_arch: "10.0"
 
-bench:
-  request_rate: 50
-
 # B200: Isolate cudagraph mode effect on fuse_attn_quant.
 # fuse_attn_quant forces FULL cudagraph (no piecewise), which may regress
 # on B200. This config tests different cudagraph combinations.

@@ -10,9 +10,6 @@ server:
   gpu_memory_utilization: 0.8
   enforce_eager: true
 
-bench:
-  request_rate: 10
-
 # DGX Spark: GB10 (sm_121), TritonMLA backend only.
 # NVFP4 quantized DeepSeek-V2-Lite (~9.4 GB).
 # enforce_eager: true to skip CUDA graph capture — the CUTLASS FP4 MoE
