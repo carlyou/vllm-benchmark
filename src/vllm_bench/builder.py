@@ -8,6 +8,7 @@ import json
 import multiprocessing
 import os
 import re
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -224,6 +225,24 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
         if os.environ.get(var):
             env[var] = os.environ[var]
 
+    # Use sccache/ccache for compiler caching if available
+    _sccache = shutil.which("sccache")
+    _ccache = shutil.which("ccache")
+    if _sccache:
+        cmake_args = env.get("CMAKE_ARGS", os.environ.get("CMAKE_ARGS", ""))
+        cmake_args += (f" -DCMAKE_C_COMPILER_LAUNCHER={_sccache}"
+                       f" -DCMAKE_CXX_COMPILER_LAUNCHER={_sccache}"
+                       f" -DCMAKE_CUDA_COMPILER_LAUNCHER={_sccache}")
+        env["CMAKE_ARGS"] = cmake_args
+        ctx.log(f"Using sccache: {_sccache}")
+    elif _ccache:
+        cmake_args = env.get("CMAKE_ARGS", os.environ.get("CMAKE_ARGS", ""))
+        cmake_args += (f" -DCMAKE_C_COMPILER_LAUNCHER={_ccache}"
+                       f" -DCMAKE_CXX_COMPILER_LAUNCHER={_ccache}"
+                       f" -DCMAKE_CUDA_COMPILER_LAUNCHER={_ccache}")
+        env["CMAKE_ARGS"] = cmake_args
+        ctx.log(f"Using ccache: {_ccache}")
+
     if build.use_precompiled:
         # Precompiled: single command, deps resolve from PyPI.
         # https://docs.vllm.ai/en/latest/contributing/#developing
@@ -231,6 +250,7 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
                 f"HEAD={current_state['commit'][:12]})...")
         env["VLLM_USE_PRECOMPILED"] = "1"
         _run(uv_pip + ["-e", "."], cwd=repo_dir, env=env, ctx=ctx)
+
     else:
         # Source build: install torch, build deps, then build vllm
         # https://docs.vllm.ai/en/latest/contributing/#developing
@@ -266,7 +286,8 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
         if build.cuda_arch:
             env["TORCH_CUDA_ARCH_LIST"] = build.cuda_arch
             cmake_arch = build.cuda_arch.replace(".", "")
-            cmake_args = os.environ.get("CMAKE_ARGS", "")
+            cmake_args = env.get("CMAKE_ARGS",
+                                 os.environ.get("CMAKE_ARGS", ""))
             env["CMAKE_ARGS"] = (
                 f"{cmake_args} -DCMAKE_CUDA_ARCHITECTURES={cmake_arch}"
             )
