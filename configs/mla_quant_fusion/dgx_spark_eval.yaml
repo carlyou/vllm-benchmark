@@ -5,27 +5,24 @@ project:
 build:
   use_precompiled: true
   max_jobs: 0.8
-  cuda_arch: "9.0"
 
 server:
   enforce_eager: true
 
-# H100: SM 90, eager mode (no torch.compile, no cudagraphs).
-# Cross-check to isolate compile/cudagraph effects from branch differences.
+eval:
+  script: tests/evals/gsm8k/gsm8k_eval.py
+  args: "--num-shots 5 --num-questions 10 --max-tokens 256 --temperature 0.0 --seed 42"
+
+# DGX Spark: tiny eval run to smoke-test the pipeline.
 
 branches:
-  main:
-    runs:
-      - label: main_warmup
-      - label: main_eager
-
   feat--mla-static-quant-fusion:
     runs:
       - label: feature_fuse_off_eager
         server:
           compilation_config:
             pass_config:
-              fuse_attn_quant: true
+              fuse_attn_quant: false
 
       - label: feature_fuse_on_eager
         server:

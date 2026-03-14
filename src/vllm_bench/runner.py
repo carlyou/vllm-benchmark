@@ -4,8 +4,10 @@
 
 from __future__ import annotations
 
+import json
 import random
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -17,7 +19,7 @@ from .builder import branch_to_dir, install_all
 from .config import Config
 from .resolved import ResolvedRun, resolve_runs
 from .server import Server
-from .summary import format_summary
+from .summary import format_eval_summary, format_summary
 
 
 def _repo_owner_name(repo_url: str) -> str:
@@ -230,10 +232,125 @@ def bench(config: Config, timestamp: str | None = None) -> dict[str, Path]:
     return results
 
 
-def run_all(config: Config) -> dict[str, Path]:
-    """Build all branches, optionally pre-compile servers, then benchmark."""
+def build_bench(config: Config) -> dict[str, Path]:
+    """Build all branches then run benchmarks."""
     ts = _make_timestamp()
     build(config, timestamp=ts)
     if config.project.compile_parallelism > 1:
         compile(config, timestamp=ts)
+    return bench(config, timestamp=ts)
+
+
+# ── Eval ──────────────────────────────────────────────────────────────
+
+
+def _execute_eval(resolved: ResolvedRun, config: Config,
+                  results_dir: Path,
+                  prefix: str = "") -> Path:
+    """Run an eval script against a live server and capture results."""
+    eval_cfg = resolved.eval
+    srv = resolved.server
+    outfile = results_dir / f"{resolved.label}.json"
+
+    cmd = [
+        str(resolved.venv_python),
+        str(resolved.repo_dir / eval_cfg.script),
+        *shlex.split(eval_cfg.args),
+        "--host", "http://127.0.0.1",
+        "--port", str(srv.port),
+        "--save-results", str(outfile),
+    ]
+
+    print(f"{prefix}$ {' '.join(cmd)}", flush=True)
+
+    proc = subprocess.Popen(
+        cmd,
+        cwd=resolved.repo_dir,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    for line in proc.stdout:
+        sys.stdout.write(f"{prefix}{line}")
+        sys.stdout.flush()
+    rc = proc.wait()
+
+    if rc != 0:
+        raise RuntimeError(
+            f"Eval for {resolved.label!r} failed (exit code {rc}).")
+
+    print(f"{prefix}Results saved to {outfile}", flush=True)
+    return outfile
+
+
+def _setup_eval_dirs(config: Config,
+                     timestamp: str | None = None) -> tuple[Path, Path]:
+    """Create results and logs directories for an eval run."""
+    ts = timestamp or _make_timestamp()
+    work_dir = Path(config.project.work_dir)
+    name = config.project.name.replace("/", "-")
+
+    results_dir = work_dir / "results" / name / f"eval-{ts}"
+    logs_dir = _logs_dir(config, "eval", ts)
+
+    results_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    return results_dir, logs_dir
+
+
+def eval_(config: Config, timestamp: str | None = None) -> dict[str, Path]:
+    """Run evals assuming builds already exist.
+
+    Returns mapping of label -> result file path.
+    """
+    resolved_runs = _require_builds(config)
+    eval_runs = [r for r in resolved_runs if r.eval.script]
+
+    if not eval_runs:
+        print("No runs have eval.script configured, skipping eval.")
+        return {}
+
+    results_dir, logs_dir = _setup_eval_dirs(config, timestamp)
+
+    # Save config for reproducibility
+    if config.config_path and config.config_path.exists():
+        shutil.copy2(config.config_path, results_dir / "config.yaml")
+
+    print(f"Running {len(eval_runs)} eval(s)...")
+    results: dict[str, Path] = {}
+    for i, resolved in enumerate(eval_runs):
+        prefix = f"[eval {i + 1}] "
+        with Server(resolved, config, logs_dir,
+                    prefix=prefix) as server:
+            server.warmup(resolved.bench.warmup_prompts)
+            result_path = _execute_eval(
+                resolved, config, results_dir, prefix=prefix)
+            results[resolved.label] = result_path
+
+    # Generate eval summary
+    summary = format_eval_summary(results, eval_runs)
+    summary_file = results_dir / "summary.txt"
+    summary_file.write_text(summary)
+    print(summary)
+    print(f"Eval results in: {results_dir}/")
+    print(f"Server logs in:  {logs_dir}/")
+
+    return results
+
+
+def build_eval(config: Config) -> dict[str, Path]:
+    """Build all branches then run evals."""
+    ts = _make_timestamp()
+    build(config, timestamp=ts)
+    return eval_(config, timestamp=ts)
+
+
+def all_(config: Config) -> dict[str, Path]:
+    """Build all branches, run evals (if configured), then benchmark."""
+    ts = _make_timestamp()
+    build(config, timestamp=ts)
+    if config.project.compile_parallelism > 1:
+        compile(config, timestamp=ts)
+    eval_(config, timestamp=ts)
     return bench(config, timestamp=ts)

@@ -11,7 +11,8 @@ import sys
 from pathlib import Path
 
 from .config import Config, load_config
-from .runner import bench, build, compile, repos_dir_for, run_all
+from .runner import (all_, bench, build, build_bench, build_eval, compile,
+                     eval_, repos_dir_for)
 
 
 def _print_banner(config: Config) -> None:
@@ -34,6 +35,8 @@ def _print_banner(config: Config) -> None:
     print(f"Flash-attn:  {bld.install_flash_attn}")
     if bld.cuda_arch:
         print(f"CUDA arch:   {bld.cuda_arch}")
+    if config.eval.script:
+        print(f"Eval:        {config.eval.script}")
     print(f"Work dir:    {proj.work_dir}")
     print(f"Runs:        {len(config.runs)}")
     for run in config.runs:
@@ -70,6 +73,7 @@ def _filter_runs(config: Config, labels: list[str] | None) -> Config:
         build=config.build,
         server=config.server,
         bench=config.bench,
+        eval=config.eval,
         branches=config.branches,
         runs=filtered,
         config_path=config.config_path,
@@ -95,18 +99,38 @@ def main() -> None:
     _add_common_args(p_compile)
     p_compile.add_argument("--port", type=int, default=None)
 
+    # -- build-bench --
+    p_bbench = sub.add_parser("build-bench",
+                              help="Build + benchmark")
+    _add_common_args(p_bbench)
+    p_bbench.add_argument("--port", type=int, default=None)
+    p_bbench.add_argument("--max-jobs", type=int, default=None)
+
+    # -- build-eval --
+    p_beval = sub.add_parser("build-eval",
+                             help="Build + eval")
+    _add_common_args(p_beval)
+    p_beval.add_argument("--port", type=int, default=None)
+    p_beval.add_argument("--max-jobs", type=int, default=None)
+
     # -- bench --
     p_bench = sub.add_parser("bench",
                              help="Benchmark only (builds must exist)")
     _add_common_args(p_bench)
     p_bench.add_argument("--port", type=int, default=None)
 
-    # -- run --
-    p_run = sub.add_parser("run",
-                           help="Build + benchmark (full pipeline)")
-    _add_common_args(p_run)
-    p_run.add_argument("--port", type=int, default=None)
-    p_run.add_argument("--max-jobs", type=int, default=None)
+    # -- eval --
+    p_eval = sub.add_parser("eval",
+                            help="Eval only (builds must exist)")
+    _add_common_args(p_eval)
+    p_eval.add_argument("--port", type=int, default=None)
+
+    # -- all --
+    p_all = sub.add_parser("all",
+                           help="Build + eval + benchmark")
+    _add_common_args(p_all)
+    p_all.add_argument("--port", type=int, default=None)
+    p_all.add_argument("--max-jobs", type=int, default=None)
 
     # -- clean --
     p_clean = sub.add_parser("clean",
@@ -139,10 +163,16 @@ def main() -> None:
         build(config)
     elif args.command == "compile":
         compile(config)
+    elif args.command == "build-bench":
+        build_bench(config)
+    elif args.command == "build-eval":
+        build_eval(config)
     elif args.command == "bench":
         bench(config)
-    else:
-        run_all(config)
+    elif args.command == "eval":
+        eval_(config)
+    elif args.command == "all":
+        all_(config)
 
 
 # ── clean ────────────────────────────────────────────────────────────

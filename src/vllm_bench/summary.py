@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
-"""Parse benchmark results and generate comparison tables."""
+"""Parse benchmark/eval results and generate comparison tables."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from .config import Config
 from .resolved import ResolvedRun
@@ -179,6 +180,81 @@ def format_summary(config: Config,
         for i, label in enumerate(labels):
             row += f" {data[label][name]:>{val_ws[i]}} |"
         lines.append(row)
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _load_eval_result(path: Path) -> dict[str, Any]:
+    """Load eval result JSON, returning empty dict on failure."""
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return {}
+
+
+_EVAL_METRICS: list[tuple[str, str, str]] = [
+    # (column header, json key, format)
+    ("Accuracy", "accuracy", ".3f"),
+    ("Invalid", "invalid_rate", ".3f"),
+    ("Questions", "num_questions", "d"),
+    ("Latency (s)", "latency", ".2f"),
+    ("Q/s", "questions_per_second", ".2f"),
+    ("Tokens", "total_output_tokens", "d"),
+    ("Tok/s", "tokens_per_second", ".1f"),
+]
+
+
+def format_eval_summary(result_files: dict[str, Path],
+                        resolved_runs: list[ResolvedRun]) -> str:
+    """Generate eval summary table from saved result JSONs."""
+    lines: list[str] = []
+    lines.append("=" * 44)
+    lines.append("  EVAL SUMMARY")
+    lines.append("=" * 44)
+    lines.append("")
+
+    # Load results
+    results: list[tuple[str, dict[str, Any]]] = []
+    for r in resolved_runs:
+        if r.label not in result_files:
+            continue
+        data = _load_eval_result(result_files[r.label])
+        results.append((r.label, data))
+
+    if not results:
+        lines.append("No eval results found.")
+        lines.append("")
+        return "\n".join(lines)
+
+    # Build formatted rows
+    rows: list[dict[str, str]] = []
+    for label, data in results:
+        row = {"Run": label}
+        for col, key, fmt in _EVAL_METRICS:
+            val = data.get(key)
+            if val is not None:
+                row[col] = f"{val:{fmt}}"
+            else:
+                row[col] = "—"
+        rows.append(row)
+
+    # Calculate column widths
+    cols = ["Run"] + [col for col, _, _ in _EVAL_METRICS]
+    widths = {c: max(len(c), *(len(row[c]) for row in rows)) for c in cols}
+
+    # Header
+    header = "| " + " | ".join(f"{c:<{widths[c]}}" for c in cols) + " |"
+    sep = "| " + " | ".join("-" * widths[c] for c in cols) + " |"
+    lines.append(header)
+    lines.append(sep)
+
+    # Data rows
+    for row in rows:
+        align = {c: f"{row[c]:>{widths[c]}}" for c in cols}
+        align["Run"] = f"{row['Run']:<{widths['Run']}}"
+        line = "| " + " | ".join(align[c] for c in cols) + " |"
+        lines.append(line)
 
     lines.append("")
     return "\n".join(lines)
