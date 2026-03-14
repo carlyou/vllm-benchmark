@@ -261,7 +261,12 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
         ctx.log(f"Installing vllm (precompiled, "
                 f"HEAD={current_state['commit'][:12]})...")
         env["VLLM_USE_PRECOMPILED"] = "1"
-        _run(uv_pip + ["-e", "."], cwd=repo_dir, env=env, ctx=ctx)
+        # uv needs the torch index to resolve CUDA wheels (pip doesn't).
+        # --index-strategy unsafe-best-match: allow uv to pick best version
+        # across all indexes (PyTorch index only has old cmake/ninja).
+        _run(uv_pip + ["-e", ".", "--extra-index-url", build.torch_index,
+                        "--index-strategy", "unsafe-best-match"],
+             cwd=repo_dir, env=env, ctx=ctx)
 
     else:
         # Source build: install torch, build deps, then build vllm
