@@ -164,11 +164,12 @@ def _build_identity(build: BuildConfig) -> dict:
 
 
 def _check_cuda_version(repo_dir: Path, ctx: BuildContext) -> None:
-    """Verify torch's CUDA version matches the system CUDA major version.
+    """Warn/error when torch's CUDA version doesn't match the system.
 
-    Precompiled vllm wheels may resolve torch with cu128 (CUDA 12) even on
-    CUDA 13 systems, pulling nvidia-cublas-cu12 which can't initialize on
-    SM 100+ GPUs (e.g. B200).
+    Only errors when torch CUDA is older than the system — this causes
+    cuBLAS initialization failures on newer GPUs (e.g. cuBLAS 12 on
+    SM 100+ B200). When torch CUDA is newer, it's a warning only since
+    newer cuBLAS still supports older GPUs.
     """
     venv_python = str(repo_dir / ".venv" / "bin" / "python")
     try:
@@ -182,20 +183,31 @@ def _check_cuda_version(repo_dir: Path, ctx: BuildContext) -> None:
     except (FileNotFoundError, subprocess.CalledProcessError):
         return  # Can't check, skip
 
+    if torch_cuda == "None":
+        raise RuntimeError(
+            "CPU-only torch installed on a CUDA system. "
+            "Fix: install CUDA torch, e.g.:\n"
+            "  pip install torch --index-url "
+            "https://download.pytorch.org/whl/cu130")
+
     m = re.search(r"release (\d+)\.", system_cuda)
     if not m:
         return
-    system_major = m.group(1)
-    torch_major = torch_cuda.split(".")[0]
+    system_major = int(m.group(1))
+    torch_major = int(torch_cuda.split(".")[0])
 
-    if system_major != torch_major:
+    if torch_major < system_major:
         raise RuntimeError(
             f"CUDA version mismatch: torch has CUDA {torch_cuda} "
             f"but system has CUDA {system_major}.x. "
-            f"This will cause cuBLAS initialization failures on this GPU. "
+            f"Older cuBLAS may not support this GPU. "
             f"Fix: install torch with matching CUDA version, e.g.:\n"
             f"  pip install torch --index-url "
             f"https://download.pytorch.org/whl/cu{system_major}0")
+    elif torch_major > system_major:
+        ctx.log(f"NOTE: torch has CUDA {torch_cuda}, system has "
+                f"CUDA {system_major}.x (OK for runtime, "
+                f"torch bundles its own CUDA libraries)")
 
 
 def build_vllm(repo_dir: Path, build: BuildConfig,
