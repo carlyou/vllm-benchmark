@@ -5,6 +5,7 @@ project:
 build:
   use_precompiled: true
   max_jobs: 0.8
+  cuda_arch: "9.0"
 
 server:
   enforce_eager: true

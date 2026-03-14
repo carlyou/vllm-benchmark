@@ -4,6 +4,7 @@ project:
 
 build:
   max_jobs: 0.8
+  cuda_arch: "10.0"
 
 bench:
   request_rate: 50

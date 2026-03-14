@@ -4,6 +4,7 @@ project:
 
 build:
   max_jobs: 0.8
+  cuda_arch: "9.0"
 
 # H100: SM 90, FP8 MLA model.
 # Smoke test: verify fuse-fp8-quant-merge-attn-states branch performs on par
