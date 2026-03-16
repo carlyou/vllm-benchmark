@@ -176,6 +176,8 @@ def _execute_benchmark(resolved: ResolvedRun, config: Config,
         "--num-warmups", str(bench.num_warmups),
         "--ignore-eos",
     ]
+    if bench.max_concurrency is not None:
+        cmd += ["--max-concurrency", str(bench.max_concurrency)]
 
     print(f"{prefix}$ {' '.join(cmd)}", flush=True)
 

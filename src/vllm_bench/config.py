@@ -51,8 +51,9 @@ class BenchConfig:
     input_len: int = 128
     output_len: int = 128
     request_rate: str = "inf"
+    max_concurrency: int | None = None  # --max-concurrency (None = unlimited)
     warmup_prompts: int = 3   # server-level warmup (before bench tool)
-    num_warmups: int = 3      # bench tool --num-warmups (JIT warmup)
+    num_warmups: int = 50     # bench tool --num-warmups (JIT warmup)
     iterations: int = 1       # repeat benchmark N times per run
 
 
