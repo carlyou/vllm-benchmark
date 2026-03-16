@@ -11,7 +11,6 @@ build:
 bench:
   max_concurrency: 16
   num_warmups: 50
-  iterations: 3
 
 eval:
   script: tests/evals/gsm8k/gsm8k_eval.py
@@ -46,5 +45,12 @@ branches:
       - label: fuse_on_compiled
         server:
           compilation_config:
+            pass_config:
+              fuse_attn_quant: true
+
+      - label: fuse_on_compiled_igp
+        server:
+          compilation_config:
+            use_inductor_graph_partition: true
             pass_config:
               fuse_attn_quant: true
