@@ -37,7 +37,7 @@ branches:
           enforce_eager: true
           compilation_config:
             pass_config:
-              fuse_attn_quant: false
+              fuse_attn_quant: true
 
       - label: fuse_off_compiled
         server:
