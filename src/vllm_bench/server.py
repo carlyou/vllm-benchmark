@@ -254,9 +254,7 @@ class Server:
         self._flush()
 
     def _wait_health(self) -> None:
-        timeout = self.server.wait_timeout
-        self._log(f"Waiting for server on port {self.server.port} "
-                  f"(initial timeout {timeout}s)...")
+        self._log(f"Waiting for server on port {self.server.port}...")
         self._flush()
 
         # Start tailing server log
@@ -264,6 +262,7 @@ class Server:
         self._log_tail.start()
 
         start = time.monotonic()
+        last_status = 0.0
         try:
             while True:
                 try:
@@ -296,51 +295,17 @@ class Server:
                 # Periodically flush buffered server log
                 self._flush()
 
-                if elapsed >= timeout:
-                    self._log_tail.stop()
+                # Log elapsed time every 60s for visibility
+                if elapsed - last_status >= 60:
+                    self._log(f"Still waiting for server... "
+                              f"({elapsed:.0f}s elapsed)")
                     self._flush()
-                    self._log_tail = None
-                    self._log(f"Server not ready after {elapsed:.0f}s.")
-                    timeout = self._ask_extend_timeout(elapsed, timeout)
-                    self._log_tail = _LogTail(self.log_path, self.prefix)
-                    self._log_tail.start()
+                    last_status = elapsed
         except (KeyboardInterrupt, RuntimeError):
             if self._log_tail:
                 self._log_tail.stop()
                 self._log_tail = None
             raise
-
-    def _ask_extend_timeout(self, elapsed: float,
-                            current_timeout: int) -> float:
-        """Interactive timeout extension prompt."""
-        if self._buffered:
-            raise RuntimeError(
-                f"Server timed out after {elapsed:.0f}s "
-                f"(interactive prompt disabled in parallel mode)")
-        default_ext = self.server.wait_timeout
-        prompt = (f"{self.prefix}Continue waiting? "
-                  f"[Y/enter=+{default_ext}s, <seconds>=custom, n=stop]: ")
-        try:
-            answer = input(prompt).strip()
-        except EOFError:
-            raise RuntimeError("Non-interactive and server timed out")
-
-        if answer in ("", "y", "Y", "yes", "YES"):
-            new_timeout = elapsed + default_ext
-            self._log(f"Extending timeout by {default_ext}s "
-                      f"(until {new_timeout:.0f}s total)...")
-            return new_timeout
-        elif answer.lower() in ("n", "no"):
-            raise RuntimeError("User aborted server wait")
-        else:
-            try:
-                extra = int(answer)
-                new_timeout = elapsed + extra
-                self._log(f"Extending timeout by {extra}s "
-                          f"(until {new_timeout:.0f}s total)...")
-                return new_timeout
-            except ValueError:
-                raise RuntimeError(f"Unrecognized input: {answer!r}")
 
     def _sanity_check(self) -> None:
         """Send a single completion request to verify the server works."""

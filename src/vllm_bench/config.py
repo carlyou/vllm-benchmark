@@ -41,7 +41,6 @@ class ServerConfig:
     enforce_eager: bool = False
     gpu_memory_utilization: float | None = None
     port: int = 8000
-    wait_timeout: int = 600
     compilation_config: dict | None = None
 
 
