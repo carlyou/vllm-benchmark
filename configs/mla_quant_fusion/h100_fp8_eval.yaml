@@ -10,6 +10,7 @@ build:
 
 server:
   enforce_eager: true
+  wait_timeout: 1800
 
 eval:
   script: tests/evals/gsm8k/gsm8k_eval.py
