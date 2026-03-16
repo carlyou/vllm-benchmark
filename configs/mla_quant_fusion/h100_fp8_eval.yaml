@@ -48,6 +48,13 @@ branches:
             pass_config:
               fuse_attn_quant: true
 
+      - label: fuse_off_compiled_igp
+        server:
+          compilation_config:
+            use_inductor_graph_partition: true
+            pass_config:
+              fuse_attn_quant: false
+
       - label: fuse_on_compiled_igp
         server:
           compilation_config:
