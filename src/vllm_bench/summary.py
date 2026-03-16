@@ -205,13 +205,41 @@ _EVAL_METRICS: list[tuple[str, str, str]] = [
 ]
 
 
-def format_eval_summary(result_files: dict[str, Path],
+def format_eval_summary(config: Config,
+                        result_files: dict[str, Path],
                         resolved_runs: list[ResolvedRun]) -> str:
     """Generate eval summary table from saved result JSONs."""
+    proj = config.project
+
     lines: list[str] = []
     lines.append("=" * 44)
     lines.append("  EVAL SUMMARY")
     lines.append("=" * 44)
+    lines.append("")
+    lines.append(f"Config:      {proj.name}")
+    lines.append(f"Model:       {proj.model}")
+    lines.append(f"Repo:        {proj.repo}")
+    lines.append("")
+
+    # Hardware info from first run's venv
+    first = resolved_runs[0]
+    hw = _get_hardware_info(first.venv_python)
+    lines.append("Hardware/Runtime:")
+    for k, v in hw.items():
+        lines.append(f"  {k + ':':11s}{v}")
+    lines.append("")
+
+    # Per-run details
+    lines.append("Runs:")
+    for r in resolved_runs:
+        lines.append(f"  - {r.label}:")
+        lines.append(f"      branch:     {r.branch}"
+                     f"{f' @ {r.commit}' if r.commit else ''}")
+        if r.server.compilation_config:
+            lines.append(f"      cc:         "
+                         f"{json.dumps(r.server.compilation_config)}")
+        if r.server.enforce_eager:
+            lines.append(f"      eager:      True")
     lines.append("")
 
     # Load results

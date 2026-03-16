@@ -344,7 +344,7 @@ def eval_(config: Config, timestamp: str | None = None) -> dict[str, Path]:
             results[resolved.label] = result_path
 
     # Generate eval summary
-    summary = format_eval_summary(results, eval_runs)
+    summary = format_eval_summary(config, results, eval_runs)
     summary_file = results_dir / "summary.txt"
     summary_file.write_text(summary)
     print(summary)
