@@ -106,6 +106,54 @@ def _get_hardware_info(venv_python: Path) -> dict[str, str]:
     return info
 
 
+def _format_server_cmd(config: Config, r: ResolvedRun) -> str:
+    """Reconstruct the vllm serve command for display."""
+    srv = r.server
+    parts = [
+        "vllm serve", config.project.model,
+        "--tensor-parallel-size", str(srv.tp),
+        "--max-model-len", str(srv.max_model_len),
+        "--trust-remote-code",
+        "--port", str(srv.port),
+    ]
+    if srv.gpu_memory_utilization is not None:
+        parts += ["--gpu-memory-utilization", str(srv.gpu_memory_utilization)]
+    if srv.enforce_eager:
+        parts += ["--enforce-eager"]
+    if srv.compilation_config:
+        parts += ["-cc", json.dumps(srv.compilation_config)]
+    return " ".join(parts)
+
+
+def _format_bench_cmd(config: Config, r: ResolvedRun) -> str:
+    """Reconstruct the vllm bench serve command for display."""
+    bench = r.bench
+    parts = [
+        "vllm bench serve",
+        "--model", config.project.model,
+        "--num-prompts", str(bench.num_prompts),
+        "--request-rate", str(bench.request_rate),
+        "--random-input-len", str(bench.input_len),
+        "--random-output-len", str(bench.output_len),
+        "--num-warmups", str(bench.num_warmups),
+        "--ignore-eos",
+    ]
+    if bench.max_concurrency is not None:
+        parts += ["--max-concurrency", str(bench.max_concurrency)]
+    return " ".join(parts)
+
+
+def _format_eval_cmd(config: Config, r: ResolvedRun) -> str:
+    """Reconstruct the eval script command for display."""
+    eval_cfg = r.eval
+    if not eval_cfg.script:
+        return ""
+    parts = ["python", eval_cfg.script]
+    if eval_cfg.args:
+        parts.append(eval_cfg.args)
+    return " ".join(parts)
+
+
 def format_summary(config: Config,
                    result_files: dict[str, Path],
                    resolved_runs: list[ResolvedRun],
@@ -117,7 +165,7 @@ def format_summary(config: Config,
 
     lines: list[str] = []
     lines.append("=" * 44)
-    lines.append("  RESULTS SUMMARY")
+    lines.append("  BENCHMARK SUMMARY")
     lines.append("=" * 44)
     lines.append("")
     lines.append(f"Config:      {proj.name}")
@@ -134,26 +182,14 @@ def format_summary(config: Config,
         lines.append(f"  {k + ':':11s}{v}")
     lines.append("")
 
-    # Per-run details with effective config
+    # Per-run details with commands
     lines.append("Runs:")
     for r in resolved_runs:
         lines.append(f"  - {r.label}:")
         lines.append(f"      branch:     {r.branch}"
                      f"{f' @ {r.commit}' if r.commit else ''}")
-        lines.append(f"      TP:         {r.server.tp}")
-        lines.append(f"      max_len:    {r.server.max_model_len}")
-        lines.append(f"      prompts:    {r.bench.num_prompts} "
-                     f"(in={r.bench.input_len}, out={r.bench.output_len})")
-        lines.append(f"      precompiled: {r.build.use_precompiled}")
-        if r.server.compilation_config:
-            lines.append(f"      cc:         "
-                         f"{json.dumps(r.server.compilation_config)}")
-        if r.server.enforce_eager:
-            lines.append(f"      eager:      True")
-        if r.server.gpu_memory_utilization is not None:
-            lines.append(f"      gpu_mem:    {r.server.gpu_memory_utilization}")
-        if r.build.cuda_arch:
-            lines.append(f"      cuda_arch:  {r.build.cuda_arch}")
+        lines.append(f"      server:     $ {_format_server_cmd(config, r)}")
+        lines.append(f"      bench:      $ {_format_bench_cmd(config, r)}")
     lines.append("")
 
     # Markdown metrics table
@@ -229,17 +265,16 @@ def format_eval_summary(config: Config,
         lines.append(f"  {k + ':':11s}{v}")
     lines.append("")
 
-    # Per-run details
+    # Per-run details with commands
     lines.append("Runs:")
     for r in resolved_runs:
         lines.append(f"  - {r.label}:")
         lines.append(f"      branch:     {r.branch}"
                      f"{f' @ {r.commit}' if r.commit else ''}")
-        if r.server.compilation_config:
-            lines.append(f"      cc:         "
-                         f"{json.dumps(r.server.compilation_config)}")
-        if r.server.enforce_eager:
-            lines.append(f"      eager:      True")
+        lines.append(f"      server:     $ {_format_server_cmd(config, r)}")
+        eval_cmd = _format_eval_cmd(config, r)
+        if eval_cmd:
+            lines.append(f"      eval:       $ {eval_cmd}")
     lines.append("")
 
     # Load results
