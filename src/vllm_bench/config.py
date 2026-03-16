@@ -51,7 +51,9 @@ class BenchConfig:
     input_len: int = 128
     output_len: int = 128
     request_rate: str = "inf"
-    warmup_prompts: int = 3
+    warmup_prompts: int = 3   # server-level warmup (before bench tool)
+    num_warmups: int = 3      # bench tool --num-warmups (JIT warmup)
+    iterations: int = 1       # repeat benchmark N times per run
 
 
 @dataclass

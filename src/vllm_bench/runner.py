@@ -155,11 +155,13 @@ def _setup_run_dirs(config: Config,
 
 def _execute_benchmark(resolved: ResolvedRun, config: Config,
                        results_dir: Path,
-                       prefix: str = "") -> Path:
+                       prefix: str = "",
+                       suffix: str = "") -> Path:
     """Run vllm bench serve and capture output."""
     bench = resolved.bench
     srv = resolved.server
-    outfile = results_dir / f"{resolved.label}.txt"
+    stem = f"{resolved.label}{suffix}"
+    outfile = results_dir / f"{stem}.txt"
     vllm_bin = str(resolved.vllm_bin)
 
     cmd = [
@@ -171,6 +173,7 @@ def _execute_benchmark(resolved: ResolvedRun, config: Config,
         "--request-rate", str(bench.request_rate),
         "--random-input-len", str(bench.input_len),
         "--random-output-len", str(bench.output_len),
+        "--num-warmups", str(bench.num_warmups),
         "--ignore-eos",
     ]
 
@@ -215,12 +218,19 @@ def bench(config: Config, timestamp: str | None = None) -> dict[str, Path]:
     print(f"Running {len(resolved_runs)} benchmark(s)...")
     results: dict[str, Path] = {}
     for i, resolved in enumerate(resolved_runs):
+        iters = resolved.bench.iterations
         prefix = f"[bench {i + 1}] "
         with Server(resolved, config, logs_dir,
                      prefix=prefix) as server:
             server.warmup(resolved.bench.warmup_prompts)
-            result_path = _execute_benchmark(
-                resolved, config, results_dir, prefix=prefix)
+            for it in range(iters):
+                suffix = f"_iter{it + 1}" if iters > 1 else ""
+                it_prefix = (f"[bench {i + 1} iter {it + 1}/{iters}] "
+                             if iters > 1 else prefix)
+                result_path = _execute_benchmark(
+                    resolved, config, results_dir,
+                    prefix=it_prefix, suffix=suffix)
+            # Use last iteration for summary
             results[resolved.label] = result_path
 
     # Generate summary
