@@ -65,16 +65,19 @@ def _install_handlers() -> None:
 
         if not _sigterm_installed and \
                 threading.current_thread() is threading.main_thread():
-            orig_sigterm = signal.getsignal(signal.SIGTERM)
+            for sig in (signal.SIGTERM, signal.SIGHUP):
+                orig = signal.getsignal(sig)
 
-            def _sigterm_handler(signum, frame):
-                _cleanup_servers()
-                if callable(orig_sigterm):
-                    orig_sigterm(signum, frame)
-                else:
-                    raise SystemExit(1)
+                def _make_handler(orig_handler):
+                    def _handler(signum, frame):
+                        _cleanup_servers()
+                        if callable(orig_handler):
+                            orig_handler(signum, frame)
+                        else:
+                            raise SystemExit(1)
+                    return _handler
 
-            signal.signal(signal.SIGTERM, _sigterm_handler)
+                signal.signal(sig, _make_handler(orig))
             _sigterm_installed = True
 
 
