@@ -9,7 +9,6 @@ build:
   torch_index: https://download.pytorch.org/whl/cu130
 
 server:
-  enforce_eager: true
   wait_timeout: 1800
 
 bench:
@@ -20,19 +19,33 @@ eval:
   script: tests/evals/gsm8k/gsm8k_eval.py
   args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
 
-# H100: SM 90, eager mode (no torch.compile, no cudagraphs).
+# H100: SM 90, eager + compiled benchmarks.
 # Fusion on vs off comparison on the feature branch.
 
 branches:
   feat--mla-static-quant-fusion:
     runs:
-      - label: feature_fuse_off_eager
+      - label: fuse_off_eager
+        server:
+          enforce_eager: true
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: false
+
+      - label: fuse_on_eager
+        server:
+          enforce_eager: true
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: false
+
+      - label: fuse_off_compiled
         server:
           compilation_config:
             pass_config:
               fuse_attn_quant: false
 
-      - label: feature_fuse_on_eager
+      - label: fuse_on_compiled
         server:
           compilation_config:
             pass_config:
