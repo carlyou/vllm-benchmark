@@ -67,19 +67,23 @@ def _get_hardware_info(venv_python: Path) -> dict[str, str]:
 
     if shutil.which("nvidia-smi"):
         try:
-            info["GPU"] = subprocess.check_output(
+            gpu_names = subprocess.check_output(
                 ["nvidia-smi", "--query-gpu=name",
                  "--format=csv,noheader"],
                 text=True,
-            ).strip().split("\n")[0]
+            ).strip().split("\n")
+            name = gpu_names[0]
+            n = len(gpu_names)
+            info["GPU"] = f"{n}x {name}" if n > 1 else name
         except Exception:
             info["GPU"] = "N/A"
         try:
-            info["GPU mem"] = subprocess.check_output(
+            gpu_mems = subprocess.check_output(
                 ["nvidia-smi", "--query-gpu=memory.total",
                  "--format=csv,noheader"],
                 text=True,
-            ).strip().split("\n")[0]
+            ).strip().split("\n")
+            info["GPU mem"] = gpu_mems[0]
         except Exception:
             info["GPU mem"] = "N/A"
     else:

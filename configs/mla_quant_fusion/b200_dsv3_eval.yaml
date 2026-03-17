@@ -1,0 +1,66 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: neuralmagic/DeepSeek-V3-0324-FP8
+
+build:
+  use_precompiled: true
+  max_jobs: 0.8
+  cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu128
+
+server:
+  tp: 4
+
+bench:
+  max_concurrency: 64
+  num_warmups: 50
+
+eval:
+  script: tests/evals/gsm8k/gsm8k_eval.py
+  args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
+
+# 4xB200: DeepSeek-V3-0324 FP8, TP=4.
+# Fusion on vs off comparison.
+
+branches:
+  feat--mla-static-quant-fusion:
+    runs:
+      - label: fuse_off_eager
+        server:
+          enforce_eager: true
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: false
+
+      - label: fuse_on_eager
+        server:
+          enforce_eager: true
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: true
+
+      - label: fuse_off_compiled
+        server:
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: false
+
+      - label: fuse_on_compiled
+        server:
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: true
+
+      - label: fuse_off_compiled_igp
+        server:
+          compilation_config:
+            use_inductor_graph_partition: true
+            pass_config:
+              fuse_attn_quant: false
+
+      - label: fuse_on_compiled_igp
+        server:
+          compilation_config:
+            use_inductor_graph_partition: true
+            pass_config:
+              fuse_attn_quant: true
