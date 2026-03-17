@@ -41,18 +41,6 @@ branches:
             pass_config:
               fuse_attn_quant: true
 
-      - label: fuse_off_compiled
-        server:
-          compilation_config:
-            pass_config:
-              fuse_attn_quant: false
-
-      - label: fuse_on_compiled
-        server:
-          compilation_config:
-            pass_config:
-              fuse_attn_quant: true
-
       - label: fuse_off_compiled_igp
         server:
           compilation_config:
