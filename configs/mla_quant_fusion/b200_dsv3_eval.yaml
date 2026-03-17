@@ -6,7 +6,7 @@ build:
   use_precompiled: true
   max_jobs: 0.8
   cuda_arch: "10.0"
-  torch_index: https://download.pytorch.org/whl/cu128
+  torch_index: https://download.pytorch.org/whl/cu130
 
 server:
   tp: 4
