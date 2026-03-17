@@ -1,6 +1,6 @@
 project:
   repo: https://github.com/carlyou/vllm.git
-  model: nvidia/DeepSeek-V3-0324-NVFP4
+  model: nvidia/DeepSeek-V3.2-NVFP4
 
 build:
   use_precompiled: true
