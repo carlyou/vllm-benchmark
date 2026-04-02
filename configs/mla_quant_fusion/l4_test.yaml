@@ -12,8 +12,6 @@ build:
 
 branches:
   fix/skip-nvfp4-test-sm89:
-    build:
-      use_precompiled: false
     runs:
       - label: pytest_mla_fusion
         test:
