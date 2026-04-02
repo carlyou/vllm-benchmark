@@ -1,5 +1,6 @@
 project:
   repo: https://github.com/carlyou/vllm.git
+  model: dummy
 
 build:
   cuda_arch: "9.0"
