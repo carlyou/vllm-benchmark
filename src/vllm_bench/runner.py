@@ -382,6 +382,20 @@ def _setup_test_dirs(config: Config,
     return results_dir, logs_dir
 
 
+def _ensure_pytest(resolved: ResolvedRun, prefix: str = "") -> None:
+    """Install pytest into the run's venv if not already present."""
+    check = subprocess.run(
+        [str(resolved.venv_python), "-m", "pytest", "--version"],
+        capture_output=True)
+    if check.returncode == 0:
+        return
+    print(f"{prefix}Installing pytest...", flush=True)
+    subprocess.run(
+        ["uv", "pip", "install", "--python", str(resolved.venv_python),
+         "pytest"],
+        check=True)
+
+
 def _execute_test(resolved: ResolvedRun, config: Config,
                   results_dir: Path,
                   prefix: str = "") -> tuple[Path, int]:
@@ -390,6 +404,8 @@ def _execute_test(resolved: ResolvedRun, config: Config,
     Returns (output_file, return_code). Does NOT raise on test failure
     so that all runs can complete before reporting.
     """
+    _ensure_pytest(resolved, prefix=prefix)
+
     test_cfg = resolved.test
     outfile = results_dir / f"{resolved.label}.txt"
 
