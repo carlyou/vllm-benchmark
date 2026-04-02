@@ -387,15 +387,20 @@ _TEST_DEPS = ["pytest", "tblib"]
 
 def _ensure_pytest(resolved: ResolvedRun, prefix: str = "") -> None:
     """Install pytest and test deps into the run's venv if not present."""
-    check = subprocess.run(
-        [str(resolved.venv_python), "-m", "pytest", "--version"],
-        capture_output=True)
-    if check.returncode == 0:
+    missing = []
+    for dep in _TEST_DEPS:
+        rc = subprocess.run(
+            [str(resolved.venv_python), "-c", f"import {dep}"],
+            capture_output=True).returncode
+        if rc != 0:
+            missing.append(dep)
+    if not missing:
         return
-    print(f"{prefix}Installing test dependencies...", flush=True)
+    print(f"{prefix}Installing test dependencies: {', '.join(missing)}",
+          flush=True)
     subprocess.run(
         ["uv", "pip", "install", "--python", str(resolved.venv_python)]
-        + _TEST_DEPS,
+        + missing,
         check=True)
 
 
