@@ -11,8 +11,8 @@ import sys
 from pathlib import Path
 
 from .config import Config, load_config
-from .runner import (all_, bench, build, build_bench, build_eval, compile,
-                     eval_, repos_dir_for)
+from .runner import (all_, bench, build, build_bench, build_eval, build_test,
+                     compile, eval_, test, repos_dir_for)
 
 
 def _print_banner(config: Config) -> None:
@@ -35,6 +35,8 @@ def _print_banner(config: Config) -> None:
     print(f"Flash-attn:  {bld.install_flash_attn}")
     if bld.cuda_arch:
         print(f"CUDA arch:   {bld.cuda_arch}")
+    if config.test.script:
+        print(f"Test:        {config.test.script}")
     if config.eval.script:
         print(f"Eval:        {config.eval.script}")
     print(f"Work dir:    {proj.work_dir}")
@@ -74,6 +76,7 @@ def _filter_runs(config: Config, labels: list[str] | None) -> Config:
         server=config.server,
         bench=config.bench,
         eval=config.eval,
+        test=config.test,
         branches=config.branches,
         runs=filtered,
         config_path=config.config_path,
@@ -106,6 +109,12 @@ def main() -> None:
     p_bbench.add_argument("--port", type=int, default=None)
     p_bbench.add_argument("--max-jobs", type=int, default=None)
 
+    # -- build-test --
+    p_btest = sub.add_parser("build-test",
+                             help="Build + test")
+    _add_common_args(p_btest)
+    p_btest.add_argument("--max-jobs", type=int, default=None)
+
     # -- build-eval --
     p_beval = sub.add_parser("build-eval",
                              help="Build + eval")
@@ -119,6 +128,11 @@ def main() -> None:
     _add_common_args(p_bench)
     p_bench.add_argument("--port", type=int, default=None)
 
+    # -- test --
+    p_test = sub.add_parser("test",
+                            help="Run tests only (builds must exist)")
+    _add_common_args(p_test)
+
     # -- eval --
     p_eval = sub.add_parser("eval",
                             help="Eval only (builds must exist)")
@@ -127,7 +141,7 @@ def main() -> None:
 
     # -- all --
     p_all = sub.add_parser("all",
-                           help="Build + eval + benchmark")
+                           help="Build + test + eval + benchmark")
     _add_common_args(p_all)
     p_all.add_argument("--port", type=int, default=None)
     p_all.add_argument("--max-jobs", type=int, default=None)
@@ -165,10 +179,14 @@ def main() -> None:
         compile(config)
     elif args.command == "build-bench":
         build_bench(config)
+    elif args.command == "build-test":
+        build_test(config)
     elif args.command == "build-eval":
         build_eval(config)
     elif args.command == "bench":
         bench(config)
+    elif args.command == "test":
+        test(config)
     elif args.command == "eval":
         eval_(config)
     elif args.command == "all":

@@ -76,11 +76,11 @@ branches:
 
 ### Config hierarchy
 
-| Level | build | server | bench |
-|---|---|---|---|
-| Global (top-level) | yes | yes | yes |
-| Branch (`branches.<name>`) | yes | yes | yes |
-| Run (`branches.<name>.runs[]`) | no | yes | yes |
+| Level | build | server | bench | test | eval |
+|---|---|---|---|---|---|
+| Global (top-level) | yes | yes | yes | yes | yes |
+| Branch (`branches.<name>`) | yes | yes | yes | yes | yes |
+| Run (`branches.<name>.runs[]`) | no | yes | yes | yes | yes |
 
 Effective config is merged: global -> branch -> run (for server/bench) or global -> branch (for build).
 
@@ -116,12 +116,22 @@ Effective config is merged: global -> branch -> run (for server/bench) or global
 | `request_rate` | `inf` | Requests per second |
 | `warmup_prompts` | `3` | Warmup requests before benchmark |
 
+### Test options
+
+| Field | Default | Description |
+|---|---|---|
+| `script` | none | Pytest target relative to repo root (e.g. `tests/models/test_mla.py`) |
+| `args` | none | Additional pytest CLI args (e.g. `-x -v --timeout=600`) |
+
+Tests run directly in the built venv — no server is started.
+
 ## Subcommands
 
 | Command | Description |
 |---|---|
 | `run` | Build + benchmark (full pipeline) |
 | `build` | Clone and build all branches |
+| `test` | Run pytest tests (builds must already exist) |
 | `bench` | Benchmark only (builds must already exist) |
 | `compile` | Pre-compile CUDA graphs (start/check/stop) |
 | `clean` | Remove caches (flashinfer, torch compile, triton, venvs) |

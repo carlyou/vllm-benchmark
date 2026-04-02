@@ -325,3 +325,35 @@ def format_eval_summary(config: Config,
 
     lines.append("")
     return "\n".join(lines)
+
+
+def format_test_summary(config: Config,
+                        result_files: dict[str, Path],
+                        resolved_runs: list,
+                        failures: list[str]) -> str:
+    """Generate test summary with pass/fail status per run."""
+    lines: list[str] = []
+    lines.append("")
+    lines.append("=" * 44)
+    lines.append("  TEST SUMMARY")
+    lines.append("=" * 44)
+    lines.append("")
+
+    label_w = max(len("Run"), *(len(r.label) for r in resolved_runs))
+
+    header = f"| {'Run':<{label_w}} | Status |"
+    sep = f"| {'-' * label_w} | ------ |"
+    lines.append(header)
+    lines.append(sep)
+    for r in resolved_runs:
+        status = "FAIL" if r.label in failures else "PASS"
+        lines.append(f"| {r.label:<{label_w}} | {status:<6} |")
+
+    lines.append("")
+    total = len(resolved_runs)
+    passed = total - len(failures)
+    lines.append(f"Result: {passed}/{total} passed")
+    if failures:
+        lines.append(f"Failed: {', '.join(failures)}")
+    lines.append("")
+    return "\n".join(lines)

@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .config import (BenchConfig, BuildConfig, Config, EvalConfig, RunConfig,
-                     ServerConfig)
+                     ServerConfig, TestConfig)
 
 
 @dataclass
@@ -20,6 +20,7 @@ class ResolvedRun:
     server: ServerConfig
     bench: BenchConfig
     eval: EvalConfig
+    test: TestConfig
     repo_dir: Path
     venv_python: Path
     vllm_bin: Path
@@ -54,6 +55,7 @@ def resolve_runs(config: Config, repos_dir: Path) -> list[ResolvedRun]:
             server=config.effective_server(run),
             bench=config.effective_bench(run),
             eval=config.effective_eval(run),
+            test=config.effective_test(run),
             repo_dir=repo_dir,
             venv_python=repo_dir / ".venv" / "bin" / "python3",
             vllm_bin=repo_dir / ".venv" / "bin" / "vllm",

@@ -63,6 +63,12 @@ class EvalConfig:
 
 
 @dataclass
+class TestConfig:
+    script: str = ""        # pytest target relative to repo root
+    args: str = ""          # additional pytest CLI args (shlex.split'd)
+
+
+@dataclass
 class RunConfig:
     label: str
     branch: str  # set automatically from parent branch key
@@ -71,6 +77,7 @@ class RunConfig:
     server: dict = field(default_factory=dict)
     bench: dict = field(default_factory=dict)
     eval: dict = field(default_factory=dict)
+    test: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -80,6 +87,7 @@ class BranchConfig:
     server: dict = field(default_factory=dict)
     bench: dict = field(default_factory=dict)
     eval: dict = field(default_factory=dict)
+    test: dict = field(default_factory=dict)
     commit: str = ""
     runs: list[RunConfig] = field(default_factory=list)
 
@@ -107,6 +115,7 @@ class Config:
     server: ServerConfig = field(default_factory=ServerConfig)
     bench: BenchConfig = field(default_factory=BenchConfig)
     eval: EvalConfig = field(default_factory=EvalConfig)
+    test: TestConfig = field(default_factory=TestConfig)
     branches: dict[str, BranchConfig] = field(default_factory=dict)
     runs: list[RunConfig] = field(default_factory=list)
     config_path: Path | None = field(default=None, repr=False)
@@ -136,10 +145,16 @@ class Config:
                         EvalConfig)
         return _overlay(base, run.eval, EvalConfig)
 
+    def effective_test(self, run: RunConfig) -> TestConfig:
+        """Global -> branch -> run test config."""
+        base = _overlay(self.test, self._branch_config(run).test,
+                        TestConfig)
+        return _overlay(base, run.test, TestConfig)
+
 
 # ── YAML loading ─────────────────────────────────────────────────────
 
-_SECTIONS = {"project", "build", "server", "bench", "eval", "branches"}
+_SECTIONS = {"project", "build", "server", "bench", "eval", "test", "branches"}
 
 _SECTION_FIELDS = {
     "project": {f.name for f in dc_fields(ProjectConfig)},
@@ -147,6 +162,7 @@ _SECTION_FIELDS = {
     "server": {f.name for f in dc_fields(ServerConfig)},
     "bench": {f.name for f in dc_fields(BenchConfig)},
     "eval": {f.name for f in dc_fields(EvalConfig)},
+    "test": {f.name for f in dc_fields(TestConfig)},
 }
 
 
@@ -172,8 +188,8 @@ def _build_section(cls, raw: dict, section_name: str):
     return cls(**filtered)
 
 
-_BRANCH_FIELDS = {"build", "server", "bench", "eval", "commit", "runs"}
-_RUN_FIELDS = {"label", "commit", "server", "bench", "eval"}
+_BRANCH_FIELDS = {"build", "server", "bench", "eval", "test", "commit", "runs"}
+_RUN_FIELDS = {"label", "commit", "server", "bench", "eval", "test"}
 
 
 def _parse_branches(raw_branches: dict) -> tuple[dict[str, BranchConfig],
@@ -212,6 +228,7 @@ def _parse_branches(raw_branches: dict) -> tuple[dict[str, BranchConfig],
                     server=r.get("server") or {},
                     bench=r.get("bench") or {},
                     eval=r.get("eval") or {},
+                    test=r.get("test") or {},
                 ))
             except KeyError as e:
                 raise ValueError(
@@ -223,6 +240,7 @@ def _parse_branches(raw_branches: dict) -> tuple[dict[str, BranchConfig],
             server=raw.get("server") or {},
             bench=raw.get("bench") or {},
             eval=raw.get("eval") or {},
+            test=raw.get("test") or {},
             commit=branch_commit,
             runs=runs,
         )
@@ -258,6 +276,7 @@ def load_config(config_path: str, **overrides) -> Config:
     server = _build_section(ServerConfig, raw.get("server") or {}, "server")
     bench = _build_section(BenchConfig, raw.get("bench") or {}, "bench")
     eval_ = _build_section(EvalConfig, raw.get("eval") or {}, "eval")
+    test = _build_section(TestConfig, raw.get("test") or {}, "test")
     branches, runs = _parse_branches(raw.get("branches") or {})
 
     # CLI overrides (machine-local conveniences only)
@@ -281,6 +300,7 @@ def load_config(config_path: str, **overrides) -> Config:
         server=server,
         bench=bench,
         eval=eval_,
+        test=test,
         branches=branches,
         runs=runs,
         config_path=path,

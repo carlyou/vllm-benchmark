@@ -19,7 +19,7 @@ from .builder import branch_to_dir, install_all
 from .config import Config
 from .resolved import ResolvedRun, resolve_runs
 from .server import Server
-from .summary import format_eval_summary, format_summary
+from .summary import format_eval_summary, format_summary, format_test_summary
 
 
 def _repo_owner_name(repo_url: str) -> str:
@@ -363,11 +363,122 @@ def build_eval(config: Config) -> dict[str, Path]:
     return eval_(config, timestamp=ts)
 
 
+# ── Test ─────────────────────────────────────────────────────────────
+
+
+def _setup_test_dirs(config: Config,
+                     timestamp: str | None = None) -> tuple[Path, Path]:
+    """Create results and logs directories for a test run."""
+    ts = timestamp or _make_timestamp()
+    work_dir = Path(config.project.work_dir)
+    name = config.project.name.replace("/", "-")
+
+    results_dir = work_dir / "results" / name / f"test-{ts}"
+    logs_dir = _logs_dir(config, "test", ts)
+
+    results_dir.mkdir(parents=True, exist_ok=True)
+    logs_dir.mkdir(parents=True, exist_ok=True)
+
+    return results_dir, logs_dir
+
+
+def _execute_test(resolved: ResolvedRun, config: Config,
+                  results_dir: Path,
+                  prefix: str = "") -> tuple[Path, int]:
+    """Run pytest in the repo venv and capture output.
+
+    Returns (output_file, return_code). Does NOT raise on test failure
+    so that all runs can complete before reporting.
+    """
+    test_cfg = resolved.test
+    outfile = results_dir / f"{resolved.label}.txt"
+
+    cmd = [
+        str(resolved.venv_python), "-m", "pytest",
+        str(resolved.repo_dir / test_cfg.script),
+        *shlex.split(test_cfg.args),
+    ]
+
+    print(f"{prefix}$ {' '.join(cmd)}", flush=True)
+
+    with open(outfile, "w") as out_f:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=resolved.repo_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        for line in proc.stdout:
+            out_f.write(line)
+            sys.stdout.write(f"{prefix}{line}")
+            sys.stdout.flush()
+        rc = proc.wait()
+
+    status = "PASSED" if rc == 0 else "FAILED"
+    print(f"{prefix}Tests {status} (exit code {rc}). "
+          f"Output saved to {outfile}", flush=True)
+    return outfile, rc
+
+
+def test(config: Config, timestamp: str | None = None) -> dict[str, Path]:
+    """Run tests assuming builds already exist.
+
+    Returns mapping of label -> result file path.
+    """
+    repos_dir = repos_dir_for(config)
+    all_runs = resolve_runs(config, repos_dir)
+    test_runs = [r for r in all_runs if r.test.script]
+
+    if not test_runs:
+        print("No runs have test.script configured, skipping test.")
+        return {}
+
+    _require_builds(config, resolved=test_runs)
+    results_dir, logs_dir = _setup_test_dirs(config, timestamp)
+
+    # Save config for reproducibility
+    if config.config_path and config.config_path.exists():
+        shutil.copy2(config.config_path, results_dir / "config.yaml")
+
+    print(f"Running {len(test_runs)} test suite(s)...")
+    results: dict[str, Path] = {}
+    failures: list[str] = []
+    for i, resolved in enumerate(test_runs):
+        prefix = f"[test {i + 1}] "
+        result_path, rc = _execute_test(
+            resolved, config, results_dir, prefix=prefix)
+        results[resolved.label] = result_path
+        if rc != 0:
+            failures.append(resolved.label)
+
+    # Generate test summary
+    summary = format_test_summary(config, results, test_runs, failures)
+    summary_file = results_dir / "summary.txt"
+    summary_file.write_text(summary)
+    print(summary)
+    print(f"Test results in: {results_dir}/")
+
+    if failures:
+        print(f"FAILED runs: {', '.join(failures)}", file=sys.stderr)
+        sys.exit(1)
+
+    return results
+
+
+def build_test(config: Config) -> dict[str, Path]:
+    """Build all branches then run tests."""
+    ts = _make_timestamp()
+    build(config, timestamp=ts)
+    return test(config, timestamp=ts)
+
+
 def all_(config: Config) -> dict[str, Path]:
-    """Build all branches, run evals (if configured), then benchmark."""
+    """Build all branches, run tests/evals (if configured), then benchmark."""
     ts = _make_timestamp()
     build(config, timestamp=ts)
     if config.project.compile_parallelism > 1:
         compile(config, timestamp=ts)
+    test(config, timestamp=ts)
     eval_(config, timestamp=ts)
     return bench(config, timestamp=ts)
