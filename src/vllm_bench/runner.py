@@ -382,17 +382,20 @@ def _setup_test_dirs(config: Config,
     return results_dir, logs_dir
 
 
+_TEST_DEPS = ["pytest", "tblib"]
+
+
 def _ensure_pytest(resolved: ResolvedRun, prefix: str = "") -> None:
-    """Install pytest into the run's venv if not already present."""
+    """Install pytest and test deps into the run's venv if not present."""
     check = subprocess.run(
         [str(resolved.venv_python), "-m", "pytest", "--version"],
         capture_output=True)
     if check.returncode == 0:
         return
-    print(f"{prefix}Installing pytest...", flush=True)
+    print(f"{prefix}Installing test dependencies...", flush=True)
     subprocess.run(
-        ["uv", "pip", "install", "--python", str(resolved.venv_python),
-         "pytest"],
+        ["uv", "pip", "install", "--python", str(resolved.venv_python)]
+        + _TEST_DEPS,
         check=True)
 
 
