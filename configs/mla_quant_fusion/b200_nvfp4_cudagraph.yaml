@@ -1,0 +1,36 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: carlyou/DeepSeek-V2-Lite-NVFP4
+
+build:
+  cuda_arch: "10.0a"
+
+server:
+  gpu_memory_utilization: 0.8
+  max_model_len: 2048
+
+# B200 (sm_100): Tests NVFP4 attn+quant fusion with CUDA graphs (FULL mode).
+# FlashInfer MLA supports UNIFORM_BATCH CUDA graphs on sm_100.
+#
+# Bug: output_block_scale.copy_(fp4_scales) shape mismatch when
+# num_actual_toks < padded_size during CUDA graph replay.
+# Fix: output_block_scale[:fp4_scales.shape[0]].copy_(fp4_scales)
+
+branches:
+  # "Main" with no output_block_scale slicing fix → should crash
+  fix--fp4-archs:
+    runs:
+      - label: bug_nvfp4_cudagraph
+        server:
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: true
+
+  # Feature branch with the fix
+  test--mla-quant-fusion-group-fp8:
+    runs:
+      - label: fix_nvfp4_cudagraph
+        server:
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: true
