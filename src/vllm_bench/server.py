@@ -231,10 +231,13 @@ class Server:
         self._log(f"$ {' '.join(serve_cmd)}")
 
         env = None
+        if self.server.log_level:
+            env = {**os.environ}
+            env["VLLM_LOGGING_LEVEL"] = self.server.log_level.upper()
         if self.config.project.isolate_flashinfer_cache:
             # Per-venv flashinfer JIT cache to prevent cross-venv symbol
             # conflicts (e.g. cu12 vs cu13 compiled .so files).
-            env = {**os.environ,
+            env = {**(env or os.environ),
                    "FLASHINFER_WORKSPACE_BASE":
                        str(self.repo_dir / ".flashinfer")}
 

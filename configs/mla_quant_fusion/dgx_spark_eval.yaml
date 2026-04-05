@@ -9,6 +9,7 @@ build:
 
 server:
   gpu_memory_utilization: 0.8
+  log_level: debug
 
 eval:
   script: tests/evals/gsm8k/gsm8k_eval.py

@@ -43,6 +43,7 @@ class ServerConfig:
     attention_backend: str | None = None
     port: int = 8000
     compilation_config: dict | None = None
+    log_level: str | None = None  # --log-level (e.g. "debug")
 
 
 @dataclass
