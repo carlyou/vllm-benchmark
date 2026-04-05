@@ -3,6 +3,7 @@ project:
   model: carlyou/DeepSeek-V2-Lite-FP8-Group
 
 build:
+  use_precompiled: false
   cuda_arch: "12.1"
   max_jobs: 0.8
 
