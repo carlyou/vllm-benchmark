@@ -5,12 +5,15 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -461,7 +464,6 @@ def _execute_test(resolved: ResolvedRun, config: Config,
             sys.stdout.flush()
         rc = proc.wait()
         # Kill any leftover child processes (CUDA contexts, vLLM engines)
-        import signal
         try:
             os.killpg(proc.pid, signal.SIGTERM)
         except (ProcessLookupError, PermissionError):
