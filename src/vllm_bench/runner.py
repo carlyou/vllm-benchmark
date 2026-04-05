@@ -452,6 +452,7 @@ def _execute_test(resolved: ResolvedRun, config: Config,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            start_new_session=True,
         )
         for line in proc.stdout:
             out_f.write(line)
@@ -459,6 +460,13 @@ def _execute_test(resolved: ResolvedRun, config: Config,
             sys.stdout.write(f"{prefix}{line}")
             sys.stdout.flush()
         rc = proc.wait()
+        # Kill any leftover child processes (CUDA contexts, vLLM engines)
+        import signal
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            pass
+        time.sleep(3)  # allow GPU memory to be reclaimed
 
     status = "PASSED" if rc == 0 else "FAILED"
     print(f"{prefix}Tests {status} (exit code {rc}). "
