@@ -34,6 +34,7 @@ branches:
       - label: group_fp8_fuse_on
         server:
           compilation_config:
+            cudagraph_mode: NONE
             custom_ops: ["+quant_fp8"]
             pass_config:
               fuse_attn_quant: true
