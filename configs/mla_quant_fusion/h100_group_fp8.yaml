@@ -26,14 +26,14 @@ branches:
       - label: e2e_tp1
         test:
           script: tests/compile/fusions_e2e/test_tp1_quant.py
-          args: "-x -v -k 'DeepSeek'"
+          args: "-x -v -k 'DeepSeek and TRITON_MLA'"
 
       - label: e2e_tp2
         server:
           tp: 2
         test:
           script: tests/compile/fusions_e2e/test_tp2_ar_rms.py
-          args: "-x -v -k 'DeepSeek'"
+          args: "-x -v -k 'DeepSeek and FLASHINFER_MLA'"
 
       - label: group_fp8_fuse_on
         server:
