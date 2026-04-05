@@ -1,0 +1,21 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
+
+build:
+  use_precompiled: true
+  max_jobs: 0.8
+  cuda_arch: "9.0"
+
+branches:
+  test/mla-group-fp8-fusion:
+    runs:
+      - label: pytest_mla_fusion
+        test:
+          script: tests/compile/passes/test_mla_attn_quant_fusion.py
+          args: "-x -v"
+
+      - label: pytest_tp1_e2e
+        test:
+          script: tests/compile/fusions_e2e/test_tp1_quant.py
+          args: "-x -v -k 'not Scout'"

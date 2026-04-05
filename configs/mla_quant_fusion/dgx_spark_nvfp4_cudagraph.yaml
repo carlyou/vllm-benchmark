@@ -1,0 +1,46 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: carlyou/DeepSeek-V2-Lite-NVFP4
+
+build:
+  use_precompiled: false
+  cuda_arch: "12.1"
+  max_jobs: 0.8
+  torch_index: "https://download.pytorch.org/whl/cu130"
+
+server:
+  gpu_memory_utilization: 0.8
+  max_model_len: 2048
+
+# DGX Spark: GB10 (sm_121).
+# Tests NVFP4 attn+quant fusion with CUDA graphs enabled.
+# Uses FLASHINFER_MLA backend (UNIFORM_BATCH CUDA graph support).
+# TritonMLA does not support CUDA graphs.
+# DeepSeek-V2-Lite is dense (no MoE), avoids CUTLASS FP4 MoE crash on sm121.
+#
+# Validates the output_block_scale slicing fix:
+# output_block_scale[:fp4_scales.shape[0]].copy_(fp4_scales)
+
+branches:
+  # "Main" with cmake fix only — has NVFP4 on sm_121 but no
+  # output_block_scale slicing fix → should crash with CUDA graphs
+  fix--fp4-archs:
+    runs:
+      - label: bug_nvfp4_cudagraph_fuse_on
+        server:
+          compilation_config:
+            cudagraph_mode: PIECEWISE
+            use_inductor_graph_partition: true
+            pass_config:
+              fuse_attn_quant: true
+
+  # Feature branch — has both cmake fix + output_block_scale slicing fix
+  test--mla-quant-fusion-group-fp8:
+    runs:
+      - label: fix_nvfp4_cudagraph_fuse_on
+        server:
+          compilation_config:
+            cudagraph_mode: PIECEWISE
+            use_inductor_graph_partition: true
+            pass_config:
+              fuse_attn_quant: true

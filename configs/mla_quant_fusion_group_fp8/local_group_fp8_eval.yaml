@@ -1,0 +1,24 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: /home/carlyou/projects/models/llm-quant/models/DeepSeek-V2-Lite-FP8-Group
+
+build:
+  use_precompiled: true
+  max_jobs: 0.8
+  cuda_arch: "12.0"
+
+eval:
+  script: tests/evals/gsm8k/gsm8k_eval.py
+  args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
+
+# Local DGX Spark: DeepSeek-V2-Lite FP8-Group, gsm8k eval with fusion.
+
+branches:
+  test/mla-group-fp8-fusion:
+    runs:
+      - label: gsm8k_fuse_on_eager
+        server:
+          enforce_eager: true
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: true

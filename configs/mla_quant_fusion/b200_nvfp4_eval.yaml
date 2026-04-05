@@ -21,29 +21,15 @@ eval:
 # Tests MLAAttentionNvfp4QuantPattern fusion.
 
 branches:
-  feat--mla-static-quant-fusion:
+  test--mla-quant-fusion-group-fp8:
     runs:
-      - label: fuse_off_eager
-        server:
-          enforce_eager: true
-          compilation_config:
-            pass_config:
-              fuse_attn_quant: false
-
-      - label: fuse_on_eager
-        server:
-          enforce_eager: true
-          compilation_config:
-            pass_config:
-              fuse_attn_quant: true
-
-      - label: fuse_off_compiled
+      - label: fuse_off
         server:
           compilation_config:
             pass_config:
               fuse_attn_quant: false
 
-      - label: fuse_on_compiled
+      - label: fuse_on
         server:
           compilation_config:
             pass_config:
