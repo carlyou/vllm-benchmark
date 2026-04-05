@@ -3,7 +3,6 @@ project:
   model: carlyou/DeepSeek-V2-Lite-FP8-Group
 
 build:
-  use_precompiled: false
   cuda_arch: "9.0"
 
 server:
