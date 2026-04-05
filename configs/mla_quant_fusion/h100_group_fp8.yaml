@@ -9,10 +9,6 @@ server:
   gpu_memory_utilization: 0.8
   log_level: debug
 
-eval:
-  script: tests/evals/gsm8k/gsm8k_eval.py
-  args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
-
 # 2xH100: unit tests, e2e tp1/tp2, and full GSM8K eval for group FP8.
 
 branches:
@@ -33,7 +29,7 @@ branches:
           tp: 2
         test:
           script: tests/compile/fusions_e2e/test_tp2_ar_rms.py
-          args: "-x -v -k 'DeepSeek and FLASHINFER_MLA'"
+          args: "-x -v -k 'DeepSeek and TRITON_MLA'"
 
       - label: group_fp8_fuse_on
         server:
@@ -41,3 +37,6 @@ branches:
             custom_ops: ["+quant_fp8"]
             pass_config:
               fuse_attn_quant: true
+        eval:
+          script: tests/evals/gsm8k/gsm8k_eval.py
+          args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
