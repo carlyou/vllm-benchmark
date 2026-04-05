@@ -3,10 +3,8 @@ project:
   model: carlyou/DeepSeek-V2-Lite-NVFP4
 
 build:
-  use_precompiled: true
   max_jobs: 0.8
   cuda_arch: "10.0"
-  torch_index: https://download.pytorch.org/whl/cu128
 
 bench:
   max_concurrency: 16

@@ -209,6 +209,8 @@ class Server:
                     str(srv.gpu_memory_utilization)]
         if srv.enforce_eager:
             cmd += ["--enforce-eager"]
+        if srv.attention_backend:
+            cmd += ["--attention-backend", srv.attention_backend]
         if srv.compilation_config:
             cmd += ["-cc", json.dumps(srv.compilation_config)]
         return cmd

@@ -269,16 +269,16 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
              cwd=repo_dir, env=env, ctx=ctx)
 
     else:
-        # Source build: install torch, build deps, then build vllm
+        # Source build following vllm contributing docs:
         # https://docs.vllm.ai/en/latest/contributing/#developing
         ctx.log(f"Building vllm from source "
                 f"(HEAD={current_state['commit'][:12]})...")
 
-        # 1. Install torch + torchvision + torchaudio
+        # 1. Install torch + torchvision + torchaudio (CUDA)
         _run(uv_pip + ["torch", "torchvision", "torchaudio",
                         "--extra-index-url", build.torch_index], ctx=ctx)
 
-        # 2. Install build deps (minus torch)
+        # 2. Install build deps (minus torch, already installed above)
         build_reqs = repo_dir / "requirements" / "build.txt"
         if build_reqs.exists():
             lines = []
@@ -308,7 +308,11 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
             env["CMAKE_ARGS"] = (
                 f"{cmake_args} -DCMAKE_CUDA_ARCHITECTURES={cmake_arch}"
             )
-        _run(uv_pip + ["-e", ".", "--no-build-isolation"],
+        # Pass --extra-index-url so uv resolves torch from the CUDA
+        # index (not PyPI CPU) when satisfying vllm's torch pin.
+        _run(uv_pip + ["-e", ".", "--no-build-isolation",
+                       "--extra-index-url", build.torch_index,
+                       "--index-strategy", "unsafe-best-match"],
              cwd=repo_dir, env=env, ctx=ctx)
 
     # Verify torch CUDA version matches system CUDA major version

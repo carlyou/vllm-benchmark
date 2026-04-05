@@ -40,6 +40,7 @@ class ServerConfig:
     max_model_len: int = 4096
     enforce_eager: bool = False
     gpu_memory_utilization: float | None = None
+    attention_backend: str | None = None
     port: int = 8000
     compilation_config: dict | None = None
 
