@@ -19,4 +19,4 @@ branches:
           tp: 2
         test:
           script: tests/compile/fusions_e2e/test_tp2_ar_rms.py
-          args: "-v -k 'DeepSeek'"
+          args: "-v -k 'DeepSeek and TRITON_MLA'"
