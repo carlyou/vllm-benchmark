@@ -1,15 +1,20 @@
 project:
   repo: https://github.com/carlyou/vllm.git
+  model: carlyou/DeepSeek-V2-Lite-FP8-Group
 
 build:
   use_precompiled: false
   cuda_arch: "9.0"
-  max_jobs: 0.8
 
 server:
+  gpu_memory_utilization: 0.8
   log_level: debug
 
-# 2xH100: unit tests + e2e tp1/tp2 tests for MLA quant fusion.
+eval:
+  script: tests/evals/gsm8k/gsm8k_eval.py
+  args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
+
+# 2xH100: unit tests, e2e tp1/tp2, and full GSM8K eval for group FP8.
 
 branches:
   test--mla-quant-fusion-group-fp8:
@@ -30,3 +35,10 @@ branches:
         test:
           script: tests/compile/fusions_e2e/test_tp2_ar_rms.py
           args: "-x -v -k 'DeepSeek'"
+
+      - label: group_fp8_fuse_on
+        server:
+          compilation_config:
+            custom_ops: ["+quant_fp8"]
+            pass_config:
+              fuse_attn_quant: true
