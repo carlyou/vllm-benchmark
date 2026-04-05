@@ -1,0 +1,27 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: carlyou/DeepSeek-V2-Lite-FP8-Group
+
+build:
+  use_precompiled: false
+  cuda_arch: "9.0"
+
+server:
+  gpu_memory_utilization: 0.8
+  log_level: debug
+
+eval:
+  script: tests/evals/gsm8k/gsm8k_eval.py
+  args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
+
+# 2xH100: full GSM8K eval for group FP8 with MLA fusion.
+
+branches:
+  test--mla-quant-fusion-group-fp8:
+    runs:
+      - label: group_fp8_fuse_on
+        server:
+          compilation_config:
+            custom_ops: ["+quant_fp8"]
+            pass_config:
+              fuse_attn_quant: true
