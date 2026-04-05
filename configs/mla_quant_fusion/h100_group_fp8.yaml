@@ -26,7 +26,7 @@ branches:
       - label: e2e_tp1
         test:
           script: tests/compile/fusions_e2e/test_tp1_quant.py
-          args: "-x -v -k 'DeepSeek and TRITON_MLA'"
+          args: "-v -k 'DeepSeek and TRITON_MLA'"
 
       - label: e2e_tp2
         server:
