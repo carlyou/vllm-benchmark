@@ -1,6 +1,6 @@
 project:
   repo: https://github.com/carlyou/vllm.git
-  model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
+  model: carlyou/DeepSeek-V2-Lite-FP8-Group
 
 build:
   use_precompiled: true
