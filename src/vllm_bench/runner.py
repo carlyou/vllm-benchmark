@@ -72,6 +72,13 @@ def _logs_dir(config: Config, phase: str, timestamp: str) -> Path:
     return work_dir / "logs" / name / f"{phase}-{timestamp}"
 
 
+def _symlink_current(directory: Path) -> None:
+    """Create a 'current' symlink in the parent pointing to directory."""
+    link = directory.parent / "current"
+    link.unlink(missing_ok=True)
+    link.symlink_to(directory.name)
+
+
 def build(config: Config, timestamp: str | None = None) -> Path:
     """Clone and build all unique branches. Returns repos_dir."""
     repos_dir = repos_dir_for(config)
@@ -149,6 +156,8 @@ def _setup_run_dirs(config: Config,
 
     results_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
+    _symlink_current(results_dir)
+    _symlink_current(logs_dir)
 
     return results_dir, logs_dir
 
@@ -310,6 +319,8 @@ def _setup_eval_dirs(config: Config,
 
     results_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
+    _symlink_current(results_dir)
+    _symlink_current(logs_dir)
 
     return results_dir, logs_dir
 
@@ -378,6 +389,8 @@ def _setup_test_dirs(config: Config,
 
     results_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
+    _symlink_current(results_dir)
+    _symlink_current(logs_dir)
 
     return results_dir, logs_dir
 
