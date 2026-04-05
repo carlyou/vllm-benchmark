@@ -21,5 +21,6 @@ branches:
       - label: group_fp8_fuse_on
         server:
           compilation_config:
+            cudagraph_mode: NONE
             pass_config:
               fuse_attn_quant: true
