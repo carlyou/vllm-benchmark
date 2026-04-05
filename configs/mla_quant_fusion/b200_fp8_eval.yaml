@@ -20,16 +20,8 @@ eval:
 branches:
   test--mla-quant-fusion-group-fp8:
     runs:
-      - label: fuse_off
+      - label: fp8_eval
         server:
-          enforce_eager: true
-          compilation_config:
-            pass_config:
-              fuse_attn_quant: false
-
-      - label: fuse_on
-        server:
-          enforce_eager: true
           compilation_config:
             pass_config:
               fuse_attn_quant: true
