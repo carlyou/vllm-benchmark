@@ -12,7 +12,7 @@ server:
 
 eval:
   script: tests/evals/gsm8k/gsm8k_eval.py
-  args: "--num-shots 5 --num-questions 10 --max-tokens 256 --temperature 0.0 --seed 42"
+  args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
 
 # DGX Spark: Group FP8 (kFp8Dynamic128Sym) DeepSeek-V2-Lite.
 
