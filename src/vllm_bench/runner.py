@@ -455,6 +455,7 @@ def _execute_test(resolved: ResolvedRun, config: Config,
         )
         for line in proc.stdout:
             out_f.write(line)
+            out_f.flush()
             sys.stdout.write(f"{prefix}{line}")
             sys.stdout.flush()
         rc = proc.wait()
