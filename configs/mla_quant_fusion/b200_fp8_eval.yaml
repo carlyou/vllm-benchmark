@@ -3,8 +3,9 @@ project:
   model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
 
 build:
-  max_jobs: 0.8
+  use_precompiled: true
   cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu130
 
 server:
   gpu_memory_utilization: 0.8
