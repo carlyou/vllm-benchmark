@@ -65,6 +65,23 @@ def _require_builds(config: Config,
     return resolved
 
 
+def _kill_gpu_processes() -> None:
+    """Kill any leftover GPU compute processes (e.g. vLLM EngineCore)."""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=5)
+        for line in result.stdout.strip().splitlines():
+            pid = line.strip()
+            if pid:
+                try:
+                    os.kill(int(pid), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError, ValueError):
+                    pass
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+
 def _make_timestamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
@@ -463,12 +480,16 @@ def _execute_test(resolved: ResolvedRun, config: Config,
             sys.stdout.write(f"{prefix}{line}")
             sys.stdout.flush()
         rc = proc.wait()
-        # Kill any leftover child processes (CUDA contexts, vLLM engines)
+        # Kill any leftover child processes (vLLM EngineCore spawned via
+        # multiprocessing.spawn creates new process groups, so killpg
+        # won't reach them). Use psutil-style cleanup.
         try:
-            os.killpg(proc.pid, signal.SIGTERM)
+            os.killpg(proc.pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):
             pass
-        time.sleep(3)  # allow GPU memory to be reclaimed
+        # Also kill any orphaned vLLM engine processes on our GPUs
+        _kill_gpu_processes()
+        time.sleep(2)  # allow GPU memory to be reclaimed
 
     status = "PASSED" if rc == 0 else "FAILED"
     print(f"{prefix}Tests {status} (exit code {rc}). "
