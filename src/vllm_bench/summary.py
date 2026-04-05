@@ -332,11 +332,34 @@ def format_test_summary(config: Config,
                         resolved_runs: list,
                         failures: list[str]) -> str:
     """Generate test summary with pass/fail status per run."""
+    proj = config.project
     lines: list[str] = []
     lines.append("")
     lines.append("=" * 44)
     lines.append("  TEST SUMMARY")
     lines.append("=" * 44)
+    lines.append("")
+    lines.append(f"Config:      {proj.name}")
+    lines.append(f"Model:       {proj.model}")
+    lines.append(f"Repo:        {proj.repo}")
+    lines.append("")
+
+    # Hardware info from first run's venv
+    first = resolved_runs[0]
+    hw = _get_hardware_info(first.venv_python)
+    lines.append("Hardware/Runtime:")
+    for k, v in hw.items():
+        lines.append(f"  {k + ':':11s}{v}")
+    lines.append("")
+
+    # Per-run details with commands
+    lines.append("Runs:")
+    for r in resolved_runs:
+        lines.append(f"  - {r.label}:")
+        lines.append(f"      branch:     {r.branch}"
+                     f"{f' @ {r.commit}' if r.commit else ''}")
+        test_cmd = f"python -m pytest {r.test.script} {r.test.args}".strip()
+        lines.append(f"      test:       $ {test_cmd}")
     lines.append("")
 
     label_w = max(len("Run"), *(len(r.label) for r in resolved_runs))
