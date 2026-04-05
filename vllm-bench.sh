@@ -6,6 +6,4 @@
 # Usage: ./vllm-bench.sh <command> configs/mla_quant_fusion/h100_fp8.yaml [options]
 
 set -euo pipefail
-# Reinstall to pick up any code changes after git pull
-uv pip install -e . -q 2>/dev/null || true
 exec uv run vllm-bench "$@"
