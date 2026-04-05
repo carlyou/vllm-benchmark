@@ -22,12 +22,14 @@ branches:
     runs:
       - label: fuse_off
         server:
+          enforce_eager: true
           compilation_config:
             pass_config:
               fuse_attn_quant: false
 
       - label: fuse_on
         server:
+          enforce_eager: true
           compilation_config:
             pass_config:
               fuse_attn_quant: true
