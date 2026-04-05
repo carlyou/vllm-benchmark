@@ -23,5 +23,6 @@ branches:
         server:
           compilation_config:
             cudagraph_mode: NONE
+            custom_ops: ["+quant_fp8"]
             pass_config:
               fuse_attn_quant: true
