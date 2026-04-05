@@ -1,6 +1,6 @@
 project:
   repo: https://github.com/carlyou/vllm.git
-  model: carlyou/DeepSeek-V2-Lite-NVFP4
+  model: carlyou/DeepSeek-V2-Lite-FP8-Group
 
 build:
   cuda_arch: "12.1"
@@ -8,24 +8,26 @@ build:
 
 server:
   gpu_memory_utilization: 0.8
-  enforce_eager: true
 
 eval:
   script: tests/evals/gsm8k/gsm8k_eval.py
   args: "--num-shots 5 --num-questions 10 --max-tokens 256 --temperature 0.0 --seed 42"
 
-# DGX Spark: NVFP4 eval smoke test.
+# DGX Spark: GB10 (sm_121), TritonMLA backend only.
+# Group FP8 (kFp8Dynamic128Sym) DeepSeek-V2-Lite.
+# Tests MLA attention + group FP8 quant fusion.
 
 branches:
   test--mla-quant-fusion-group-fp8:
     runs:
-      - label: nvfp4_fuse_off
+      - label: group_fp8_fuse_off
         server:
           compilation_config:
+            cudagraph_mode: NONE
             pass_config:
               fuse_attn_quant: false
 
-      - label: nvfp4_fuse_on
+      - label: group_fp8_fuse_on
         server:
           compilation_config:
             cudagraph_mode: NONE
