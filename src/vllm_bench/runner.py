@@ -73,10 +73,17 @@ def _logs_dir(config: Config, phase: str, timestamp: str) -> Path:
 
 
 def _symlink_current(directory: Path) -> None:
-    """Create a 'current' symlink in the parent pointing to directory."""
-    link = directory.parent / "current"
+    """Create a 'current' symlink under logs/ or results/ pointing to directory.
+
+    Given e.g. results/<config_name>/eval-20260405/, creates
+    results/current -> <config_name>/eval-20260405/
+    """
+    # directory.parent = results/<config_name>, grandparent = results/
+    top = directory.parent.parent
+    link = top / "current"
+    rel = directory.relative_to(top)
     link.unlink(missing_ok=True)
-    link.symlink_to(directory.name)
+    link.symlink_to(rel)
 
 
 def build(config: Config, timestamp: str | None = None) -> Path:
