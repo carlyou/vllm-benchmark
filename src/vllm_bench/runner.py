@@ -66,18 +66,27 @@ def _require_builds(config: Config,
 
 
 def _kill_gpu_processes() -> None:
-    """Kill any leftover GPU compute processes (e.g. vLLM EngineCore)."""
+    """Kill any leftover GPU compute processes and wait for memory release."""
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-compute-apps=pid", "--format=csv,noheader"],
             capture_output=True, text=True, timeout=5)
-        for line in result.stdout.strip().splitlines():
-            pid = line.strip()
-            if pid:
-                try:
-                    os.kill(int(pid), signal.SIGKILL)
-                except (ProcessLookupError, PermissionError, ValueError):
-                    pass
+        pids = [p.strip() for p in result.stdout.strip().splitlines() if p.strip()]
+        for pid in pids:
+            try:
+                os.kill(int(pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, ValueError):
+                pass
+        # Wait until all GPU processes are gone
+        if pids:
+            for _ in range(30):  # up to 30s
+                time.sleep(1)
+                check = subprocess.run(
+                    ["nvidia-smi", "--query-compute-apps=pid",
+                     "--format=csv,noheader"],
+                    capture_output=True, text=True, timeout=5)
+                if not check.stdout.strip():
+                    break
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
