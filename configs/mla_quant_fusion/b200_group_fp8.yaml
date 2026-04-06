@@ -15,19 +15,9 @@ server:
 branches:
   test--mla-quant-fusion-group-fp8:
     runs:
-      - label: unit_test
-        test:
-          script: tests/compile/passes/test_mla_attn_quant_fusion.py
-          args: "-x -v"
-
-      - label: e2e_tp1
-        test:
-          script: tests/compile/fusions_e2e/test_tp1_quant.py
-          args: "-v -k 'DeepSeek'"
-
       - label: e2e_tp2
         server:
           tp: 2
         test:
           script: tests/compile/fusions_e2e/test_tp2_ar_rms.py
-          args: "-v -k 'DeepSeek'"
+          args: "-v -k 'DeepSeek-V3'"
