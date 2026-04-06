@@ -65,6 +65,25 @@ def _require_builds(config: Config,
     return resolved
 
 
+def _clear_jit_caches() -> None:
+    """Wipe JIT caches (vLLM compile, flashinfer, triton, torchinductor)."""
+    import shutil as _shutil
+    home = os.path.expanduser("~")
+    dirs = [
+        os.path.join(home, ".cache", "vllm"),
+        os.path.join(home, ".cache", "flashinfer"),
+        os.path.join(home, ".triton", "cache"),
+    ]
+    # torchinductor uses /tmp/torchinductor_<user>/
+    user = os.environ.get("USER", "root")
+    dirs.append(f"/tmp/torchinductor_{user}")
+
+    for d in dirs:
+        if os.path.isdir(d):
+            _shutil.rmtree(d, ignore_errors=True)
+            print(f"  Cleared cache: {d}")
+
+
 def _kill_gpu_processes() -> None:
     """Kill any leftover GPU compute processes and wait for memory release."""
     try:
@@ -462,6 +481,10 @@ def _execute_test(resolved: ResolvedRun, config: Config,
     so that all runs can complete before reporting.
     """
     _ensure_pytest(resolved, prefix=prefix)
+
+    if resolved.server.clear_caches:
+        print(f"{prefix}Clearing JIT caches...", flush=True)
+        _clear_jit_caches()
 
     test_cfg = resolved.test
     outfile = results_dir / f"{resolved.label}.txt"

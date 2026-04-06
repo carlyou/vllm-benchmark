@@ -44,6 +44,7 @@ class ServerConfig:
     port: int = 8000
     compilation_config: dict | None = None
     log_level: str | None = None  # --log-level (e.g. "debug")
+    clear_caches: bool = False    # wipe JIT caches before run
 
 
 @dataclass

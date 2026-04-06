@@ -8,6 +8,7 @@ build:
 
 server:
   log_level: debug
+  clear_caches: true
 
 # 2xB200: unit tests and e2e tp1/tp2 for MLA quant fusion.
 

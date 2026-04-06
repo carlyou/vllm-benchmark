@@ -230,6 +230,11 @@ class Server:
         serve_cmd = self._build_serve_cmd()
         self._log(f"$ {' '.join(serve_cmd)}")
 
+        if self.server.clear_caches:
+            from .runner import _clear_jit_caches
+            self._log("Clearing JIT caches...")
+            _clear_jit_caches()
+
         env = None
         if self.server.log_level:
             env = {**os.environ}
