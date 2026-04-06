@@ -1,0 +1,23 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: nvidia/DeepSeek-V3.2-NVFP4
+
+build:
+  use_precompiled: false
+  cuda_arch: "12.1"
+  max_jobs: 0.8
+  install_deepgemm: true
+
+server:
+  log_level: debug
+  clear_caches: true
+
+# DGX Spark: DSV3.2 NVFP4 sparse MLA e2e test.
+
+branches:
+  test--mla-quant-fusion-group-fp8:
+    runs:
+      - label: e2e_dsv32_nvfp4
+        test:
+          script: tests/compile/fusions_e2e/test_tp1_quant.py
+          args: "-v -k 'DeepSeek-V3.2 and FLASHMLA_SPARSE and inductor and -rms'"
