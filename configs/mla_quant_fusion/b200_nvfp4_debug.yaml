@@ -1,0 +1,21 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: nvidia/DeepSeek-R1-NVFP4
+
+build:
+  cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu130
+
+server:
+  log_level: debug
+  clear_caches: true
+
+# 1xB200: debug NVFP4 MLA attn_quant_fusion graph dump.
+
+branches:
+  test--mla-quant-fusion-group-fp8:
+    runs:
+      - label: nvfp4_graph_dump
+        test:
+          script: tests/compile/debug_nvfp4_graph.py
+          args: ""
