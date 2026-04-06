@@ -1,6 +1,6 @@
 project:
   repo: https://github.com/carlyou/vllm.git
-  model: nvidia/DeepSeek-R1-NVFP4
+  model: nvidia/DeepSeek-R1-0528-NVFP4-v2
 
 build:
   cuda_arch: "10.0"
