@@ -1,0 +1,21 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: nvidia/DeepSeek-R1-0528-NVFP4-v2
+
+build:
+  cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu130
+
+server:
+  log_level: debug
+  clear_caches: true
+
+# 1xB200: e2e tp1 NVFP4 test with R1-0528-NVFP4-v2 (quantized o_proj).
+
+branches:
+  test--mla-quant-fusion-group-fp8:
+    runs:
+      - label: e2e_tp1
+        test:
+          script: tests/compile/fusions_e2e/test_tp1_quant.py
+          args: "-v -k 'DeepSeek and fp4'"
