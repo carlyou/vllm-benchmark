@@ -1,0 +1,20 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: carlyou/DeepSeek-V2-Lite-FP8-Group
+
+build:
+  cuda_arch: "12.0"
+
+server:
+  log_level: debug
+  clear_caches: true
+
+# 1x RTX PRO 6000: e2e tp1 test for MLA quant fusion.
+
+branches:
+  test--mla-quant-fusion-group-fp8:
+    runs:
+      - label: e2e_tp1
+        test:
+          script: tests/compile/fusions_e2e/test_tp1_quant.py
+          args: "-v -k 'DeepSeek'"
