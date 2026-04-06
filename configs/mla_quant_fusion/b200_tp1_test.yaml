@@ -18,4 +18,4 @@ branches:
       - label: e2e_tp1
         test:
           script: tests/compile/fusions_e2e/test_tp1_quant.py
-          args: "-v -k 'DeepSeek'"
+          args: "-v -k 'DeepSeek-V3'"
