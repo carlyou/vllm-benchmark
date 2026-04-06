@@ -159,6 +159,7 @@ def _build_identity(build: BuildConfig) -> dict:
         "use_precompiled": build.use_precompiled,
         "cuda_arch": build.cuda_arch,
         "install_flash_attn": build.install_flash_attn,
+        "install_deepgemm": build.install_deepgemm,
         "torch_index": build.torch_index,
     }
 
@@ -314,6 +315,20 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
                        "--extra-index-url", build.torch_index,
                        "--index-strategy", "unsafe-best-match"],
              cwd=repo_dir, env=env, ctx=ctx)
+
+    # 5. Optionally install DeepGEMM (requires git clone with submodules)
+    if build.install_deepgemm:
+        import tempfile
+        ctx.log("Installing DeepGEMM...")
+        dg_dir = repo_dir / ".deepgemm"
+        if not dg_dir.exists():
+            _run(["git", "clone", "--recursive",
+                  "https://github.com/deepseek-ai/DeepGEMM.git",
+                  str(dg_dir)], ctx=ctx)
+        result = _run(uv_pip + ["-e", str(dg_dir), "--no-build-isolation"],
+                      check=False, ctx=ctx)
+        if result.returncode != 0:
+            ctx.log("WARNING: DeepGEMM install failed, skipping.")
 
     # Verify torch CUDA version matches system CUDA major version
     _check_cuda_version(repo_dir, ctx)
