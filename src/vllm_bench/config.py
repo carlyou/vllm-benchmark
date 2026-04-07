@@ -96,6 +96,17 @@ class BranchConfig:
     runs: list[RunConfig] = field(default_factory=list)
 
 
+def _deep_merge(base: dict, overrides: dict) -> dict:
+    """Recursively merge *overrides* into *base*, returning a new dict."""
+    merged = dict(base)
+    for k, v in overrides.items():
+        if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
+            merged[k] = _deep_merge(merged[k], v)
+        else:
+            merged[k] = v
+    return merged
+
+
 def _overlay(base, overrides: dict, cls):
     """Create a new dataclass instance by overlaying overrides on base."""
     if not overrides:
@@ -108,7 +119,12 @@ def _overlay(base, overrides: dict, cls):
             f"{', '.join(sorted(unknown))}. "
             f"Valid keys: {', '.join(sorted(valid_keys))}")
     kwargs = {f.name: getattr(base, f.name) for f in dc_fields(base)}
-    kwargs.update(overrides)
+    for k, v in overrides.items():
+        old = kwargs.get(k)
+        if isinstance(old, dict) and isinstance(v, dict):
+            kwargs[k] = _deep_merge(old, v)
+        else:
+            kwargs[k] = v
     return cls(**kwargs)
 
 
