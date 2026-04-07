@@ -10,6 +10,7 @@ server:
   tp: 4
   max_model_len: 4096
   gpu_memory_utilization: 0.9
+  log_level: debug
   compilation_config:
     cudagraph_mode: NONE
     custom_ops: ["+quant_fp8"]
@@ -20,26 +21,26 @@ bench:
   output_len: 128
   request_rate: inf
 
-# 4xB200: DSV3 FP8 eval and A/B benchmark — fusion on vs off.
+# 4xB200: DSV3 FP8 A/B benchmark (main vs feature) and GSM8K eval.
 
 branches:
-  test--mla-quant-fusion-group-fp8:
+  main:
     runs:
-      # Warmup run to prime GPU caches
-      - label: warmup
+      - label: main_warmup
+        bench:
+          num_prompts: 10
+      - label: main_baseline
+
+  feat--mla-quant-fusion-group-fp8:
+    runs:
+      - label: feat_warmup
         bench:
           num_prompts: 10
 
-      # Benchmark: fusion OFF (baseline)
-      - label: fuse_off
-        server:
-          compilation_config:
-            pass_config:
-              fuse_attn_quant: false
-
       # Benchmark: fusion ON
-      - label: fuse_on
+      - label: feat_fuse_on
         server:
+          clear_caches: true
           compilation_config:
             pass_config:
               fuse_attn_quant: true
@@ -47,6 +48,7 @@ branches:
       # Eval: GSM8K with fusion ON
       - label: gsm8k_fuse_on
         server:
+          clear_caches: true
           compilation_config:
             pass_config:
               fuse_attn_quant: true
