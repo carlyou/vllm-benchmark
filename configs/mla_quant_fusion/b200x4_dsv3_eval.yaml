@@ -22,7 +22,6 @@ branches:
     runs:
       - label: gsm8k_fuse_on
         server:
-          clear_caches: true
           compilation_config:
             pass_config:
               fuse_attn_quant: true

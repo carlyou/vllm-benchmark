@@ -13,7 +13,6 @@ server:
   log_level: debug
   compilation_config:
     cudagraph_mode: NONE
-    custom_ops: ["+quant_fp8"]
 
 bench:
   num_prompts: 500
@@ -29,10 +28,10 @@ branches:
       # Warmup + compile with fusion ON (first run clears caches)
       - label: warmup_fuse_on
         server:
-          clear_caches: true
           compilation_config:
             pass_config:
               fuse_attn_quant: true
+              custom_ops: ["+quant_fp8"]
         bench:
           num_prompts: 10
 
@@ -42,6 +41,7 @@ branches:
           compilation_config:
             pass_config:
               fuse_attn_quant: true
+              custom_ops: ["+quant_fp8"]
 
       # Warmup + compile with fusion OFF (different cache key, no clear needed)
       - label: warmup_fuse_off
