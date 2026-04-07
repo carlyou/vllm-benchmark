@@ -12,7 +12,7 @@ server:
   gpu_memory_utilization: 0.9
   log_level: debug
   compilation_config:
-    cudagraph_mode: NONE
+    cudagraph_mode: FULL
 
 bench:
   num_prompts: 500
