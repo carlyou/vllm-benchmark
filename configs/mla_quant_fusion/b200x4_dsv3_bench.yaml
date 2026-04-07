@@ -1,0 +1,60 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: deepseek-ai/DeepSeek-V3
+
+build:
+  cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu130
+
+server:
+  tp: 4
+  max_model_len: 4096
+  gpu_memory_utilization: 0.9
+  log_level: debug
+  compilation_config:
+    cudagraph_mode: NONE
+    custom_ops: ["+quant_fp8"]
+
+bench:
+  num_prompts: 500
+  input_len: 128
+  output_len: 128
+  request_rate: inf
+
+# 4xB200: DSV3 FP8 A/B benchmark — fuse_on vs fuse_off on feature branch.
+
+branches:
+  feat--mla-quant-fusion-group-fp8:
+    runs:
+      # Warmup + compile with fusion ON (first run clears caches)
+      - label: warmup_fuse_on
+        server:
+          clear_caches: true
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: true
+        bench:
+          num_prompts: 10
+
+      # Benchmark: fusion ON (reuses compiled cache)
+      - label: fuse_on
+        server:
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: true
+
+      # Warmup + compile with fusion OFF (different cache key, no clear needed)
+      - label: warmup_fuse_off
+        server:
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: false
+        bench:
+          num_prompts: 10
+
+      # Benchmark: fusion OFF
+      - label: fuse_off
+        server:
+          compilation_config:
+            pass_config:
+              fuse_attn_quant: false
