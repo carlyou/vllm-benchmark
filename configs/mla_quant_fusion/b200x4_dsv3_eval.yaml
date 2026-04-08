@@ -13,7 +13,7 @@ server:
   log_level: debug
   wait_timeout: 1800
   compilation_config:
-    cudagraph_mode: FULL
+    cudagraph_mode: NONE
     custom_ops: ["+quant_fp8"]
 
 # 4xB200: DSV3 FP8 GSM8K eval with MLA attn+quant fusion.
