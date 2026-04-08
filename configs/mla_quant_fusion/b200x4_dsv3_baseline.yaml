@@ -1,0 +1,26 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: deepseek-ai/DeepSeek-V3
+
+build:
+  cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu130
+
+server:
+  tp: 4
+  max_model_len: 4096
+  gpu_memory_utilization: 0.95
+  log_level: debug
+  wait_timeout: 600
+  enforce_eager: true
+
+# 4xB200: DSV3 FP8 GSM8K baseline eval on main with eager mode.
+
+branches:
+  main:
+    use_precompiled: true
+    runs:
+      - label: gsm8k_baseline
+        eval:
+          script: tests/evals/gsm8k/gsm8k_eval.py
+          args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
