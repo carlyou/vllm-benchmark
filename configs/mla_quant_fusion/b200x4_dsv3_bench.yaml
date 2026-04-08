@@ -21,26 +21,32 @@ bench:
   warmup_prompts: 3
   num_warmups: 50
 
-# 4xB200: DSV3 FP8 benchmark — main eager vs feature fusion.
+# 4xB200: DSV3 FP8 benchmark — main (fuse off) vs feature (fuse on).
+# Both use torch.compile with cudagraph NONE for fair comparison.
 
 branches:
-  main:
-    use_precompiled: true
+  feat--mla-quant-fusion-group-fp8:
     runs:
       - label: main_warmup
         server:
-          enforce_eager: true
+          compilation_config:
+            cudagraph_mode: NONE
+            custom_ops: ["+quant_fp8"]
+            pass_config:
+              fuse_attn_quant: false
         bench:
           num_prompts: 10
           num_warmups: 5
 
-      - label: main_eager
+      - label: fuse_off
         server:
-          enforce_eager: true
+          compilation_config:
+            cudagraph_mode: NONE
+            custom_ops: ["+quant_fp8"]
+            pass_config:
+              fuse_attn_quant: false
 
-  feat--mla-quant-fusion-group-fp8:
-    runs:
-      - label: feat_fuse_on
+      - label: fuse_on
         server:
           compilation_config:
             cudagraph_mode: NONE
