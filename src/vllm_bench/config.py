@@ -46,6 +46,8 @@ class ServerConfig:
     compilation_config: dict | None = None
     log_level: str | None = None  # --log-level (e.g. "debug")
     clear_caches: bool = False    # wipe JIT caches before run
+    env: dict[str, str] | None = None  # extra env vars for server process
+    wait_timeout: int = 600  # seconds to wait for server health
 
 
 @dataclass

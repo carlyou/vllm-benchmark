@@ -236,8 +236,10 @@ class Server:
             _clear_jit_caches()
 
         env = None
+        if self.server.env:
+            env = {**os.environ, **self.server.env}
         if self.server.log_level:
-            env = {**os.environ}
+            env = {**(env or os.environ)}
             env["VLLM_LOGGING_LEVEL"] = self.server.log_level.upper()
         if self.config.project.isolate_flashinfer_cache:
             # Per-venv flashinfer JIT cache to prevent cross-venv symbol

@@ -13,6 +13,9 @@ server:
   log_level: debug
   wait_timeout: 600
   enforce_eager: true
+  env:
+    VLLM_DISABLE_FLASHINFER: "1"
+    VLLM_ATTENTION_BACKEND: FLASH_ATTN
 
 # 4xB200: DSV3 FP8 GSM8K baseline eval on main with eager mode.
 
