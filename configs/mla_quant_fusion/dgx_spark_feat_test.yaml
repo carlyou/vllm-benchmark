@@ -1,0 +1,22 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: carlyou/DeepSeek-V2-Lite-FP8-Group
+
+server:
+  log_level: debug
+  clear_caches: true
+
+# DGX Spark: unit tests and e2e tp1 on feature branch.
+
+branches:
+  feat--mla-quant-fusion-group-fp8:
+    runs:
+      - label: unit_test
+        test:
+          script: tests/compile/passes/test_mla_attn_quant_fusion.py
+          args: "-x -v"
+
+      - label: e2e_tp1
+        test:
+          script: tests/compile/fusions_e2e/test_tp1_quant.py
+          args: "-v -k 'DeepSeek'"

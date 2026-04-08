@@ -5,6 +5,7 @@ project:
 build:
   cuda_arch: "10.0"
   torch_index: https://download.pytorch.org/whl/cu130
+  auto_git_pull: False
 
 server:
   tp: 4
