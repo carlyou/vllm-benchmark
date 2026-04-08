@@ -8,7 +8,7 @@ build:
 server:
   tp: 8
   max_model_len: 4096
-  gpu_memory_utilization: 0.95
+  gpu_memory_utilization: 0.9
   log_level: debug
   wait_timeout: 1800
   compilation_config:
