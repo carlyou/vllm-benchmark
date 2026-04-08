@@ -33,6 +33,7 @@ class BuildConfig:
     cuda_arch: str | None = None
     max_jobs: float = 1.0  # <=1: fraction of CPU cores, >1: absolute count
     torch_index: str = "https://download.pytorch.org/whl/cu130"
+    auto_git_pull: bool = True  # git fetch+checkout before build
 
 
 @dataclass

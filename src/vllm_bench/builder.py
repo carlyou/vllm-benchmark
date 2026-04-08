@@ -87,7 +87,8 @@ def _run(cmd: list[str], cwd: Path | None = None, env: dict | None = None,
 
 def clone_or_update(repo_url: str, branch: str, commit: str,
                     repos_dir: Path,
-                    ctx: BuildContext | None = None) -> Path:
+                    ctx: BuildContext | None = None,
+                    auto_git_pull: bool = True) -> Path:
     """Clone or fetch+checkout a branch into repos_dir/<sanitized-branch>/."""
     if ctx is None:
         ctx = BuildContext()
@@ -97,6 +98,9 @@ def clone_or_update(repo_url: str, branch: str, commit: str,
     if not repo_dir.exists():
         ctx.log(f"Cloning {repo_url} -> {repo_dir}")
         _run(["git", "clone", repo_url, str(repo_dir)], ctx=ctx)
+    elif not auto_git_pull:
+        ctx.log(f"Skipping git pull (auto_git_pull=false), using existing {repo_dir}")
+        return repo_dir
     else:
         # Ensure origin matches the configured repo URL
         _run(["git", "remote", "set-url", "origin", repo_url],
@@ -357,7 +361,8 @@ def _install_one(repo_url: str, build: BuildConfig,
         ctx.log(f"{'=' * 44}")
 
         repo_dir = clone_or_update(repo_url, branch, commit,
-                                   repos_dir, ctx=ctx)
+                                   repos_dir, ctx=ctx,
+                                   auto_git_pull=build.auto_git_pull)
         setup_venv(repo_dir, ctx=ctx)
         build_vllm(repo_dir, build, max_jobs=max_jobs, ctx=ctx)
         return repo_dir
