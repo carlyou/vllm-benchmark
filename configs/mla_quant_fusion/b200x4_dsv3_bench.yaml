@@ -9,52 +9,41 @@ build:
 server:
   tp: 4
   max_model_len: 4096
-  gpu_memory_utilization: 0.9
+  gpu_memory_utilization: 0.95
   log_level: debug
-  compilation_config:
-    cudagraph_mode: FULL
+  wait_timeout: 1800
 
 bench:
-  num_prompts: 500
+  num_prompts: 1000
   input_len: 128
   output_len: 128
   request_rate: inf
+  warmup_prompts: 3
+  num_warmups: 50
 
-# 4xB200: DSV3 FP8 A/B benchmark — fuse_on vs fuse_off on feature branch.
+# 4xB200: DSV3 FP8 benchmark — main eager vs feature fusion.
 
 branches:
+  main:
+    use_precompiled: true
+    runs:
+      - label: main_warmup
+        server:
+          enforce_eager: true
+        bench:
+          num_prompts: 10
+          num_warmups: 5
+
+      - label: main_eager
+        server:
+          enforce_eager: true
+
   feat--mla-quant-fusion-group-fp8:
     runs:
-      # Warmup + compile with fusion ON (first run clears caches)
-      - label: warmup_fuse_on
+      - label: feat_fuse_on
         server:
           compilation_config:
+            cudagraph_mode: NONE
+            custom_ops: ["+quant_fp8"]
             pass_config:
               fuse_attn_quant: true
-              custom_ops: ["+quant_fp8"]
-        bench:
-          num_prompts: 10
-
-      # Benchmark: fusion ON (reuses compiled cache)
-      - label: fuse_on
-        server:
-          compilation_config:
-            pass_config:
-              fuse_attn_quant: true
-              custom_ops: ["+quant_fp8"]
-
-      # Warmup + compile with fusion OFF (different cache key, no clear needed)
-      - label: warmup_fuse_off
-        server:
-          compilation_config:
-            pass_config:
-              fuse_attn_quant: false
-        bench:
-          num_prompts: 10
-
-      # Benchmark: fusion OFF
-      - label: fuse_off
-        server:
-          compilation_config:
-            pass_config:
-              fuse_attn_quant: false
