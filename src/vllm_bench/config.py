@@ -46,6 +46,7 @@ class ServerConfig:
     attention_backend: str | None = None
     port: int = 8000
     compilation_config: dict | None = None
+    kernel_config: dict | None = None   # --kernel-config (e.g. {"moe_backend": "triton"})
     log_level: str | None = None  # --log-level (e.g. "debug")
     clear_caches: bool = False    # wipe JIT caches before run
     env: dict[str, str] | None = None  # extra env vars for server process

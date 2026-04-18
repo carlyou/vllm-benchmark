@@ -213,6 +213,8 @@ class Server:
             cmd += ["--attention-backend", srv.attention_backend]
         if srv.compilation_config:
             cmd += ["-cc", json.dumps(srv.compilation_config)]
+        if srv.kernel_config:
+            cmd += ["--kernel-config", json.dumps(srv.kernel_config)]
         return cmd
 
     def _start(self) -> None:
