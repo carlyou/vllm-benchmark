@@ -12,7 +12,7 @@ server:
 # 2xH100: unit tests, e2e tp1, and e2e tp2 on feature branch.
 
 branches:
-  feat--mla-quant-fusion-group-fp8:
+  test--mla-quant-fusion-group-fp8:
     runs:
       - label: unit_test
         test:
