@@ -5,7 +5,7 @@ project:
 build:
   cuda_arch: "10.0"
   torch_index: https://download.pytorch.org/whl/cu130
-  auto_git_pull: False
+  install_flashinfer_jit_cache: true
 
 server:
   tp: 4
@@ -13,15 +13,23 @@ server:
   gpu_memory_utilization: 0.95
   log_level: debug
   wait_timeout: 1800
+  kernel_config:
+    moe_backend: triton
   compilation_config:
     cudagraph_mode: NONE
     custom_ops: ["+quant_fp8"]
 
-# 4xB200: DSV3 FP8 GSM8K eval with MLA attn+quant fusion.
+# 4xB200: DSV3 FP8 GSM8K eval — triton MoE backend.
+# Previous runs with FLASHINFER_TRTLLM gave 0.015 accuracy.
 
 branches:
-  feat--mla-quant-fusion-group-fp8:
+  test--mla-quant-fusion-group-fp8:
     runs:
+      - label: gsm8k_baseline
+        eval:
+          script: tests/evals/gsm8k/gsm8k_eval.py
+          args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
+
       - label: gsm8k_fuse_on
         server:
           compilation_config:
