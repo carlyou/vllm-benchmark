@@ -164,6 +164,7 @@ def _build_identity(build: BuildConfig) -> dict:
         "cuda_arch": build.cuda_arch,
         "install_flash_attn": build.install_flash_attn,
         "install_deepgemm": build.install_deepgemm,
+        "install_flashinfer_jit_cache": build.install_flashinfer_jit_cache,
         "torch_index": build.torch_index,
     }
 
@@ -333,6 +334,21 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
                       check=False, ctx=ctx)
         if result.returncode != 0:
             ctx.log("WARNING: DeepGEMM install failed, skipping.")
+
+    # 6. Optionally install flashinfer-jit-cache (pre-compiled JIT kernels)
+    if build.install_flashinfer_jit_cache:
+        # Determine CUDA version from torch_index (e.g. cu130 -> 130)
+        import re as _re
+        cuda_ver_match = _re.search(r"cu(\d+)", build.torch_index)
+        cuda_ver = cuda_ver_match.group(1) if cuda_ver_match else "130"
+        fi_index = f"https://flashinfer.ai/whl/cu{cuda_ver}"
+        ctx.log(f"Installing flashinfer-jit-cache (index: {fi_index})...")
+        result = _run(
+            uv_pip + ["flashinfer-jit-cache",
+                       "--extra-index-url", fi_index],
+            check=False, ctx=ctx)
+        if result.returncode != 0:
+            ctx.log("WARNING: flashinfer-jit-cache install failed, skipping.")
 
     # Verify torch CUDA version matches system CUDA major version
     _check_cuda_version(repo_dir, ctx)

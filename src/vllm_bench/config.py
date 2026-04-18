@@ -30,6 +30,7 @@ class BuildConfig:
     use_precompiled: bool = True
     install_flash_attn: bool = False
     install_deepgemm: bool = False
+    install_flashinfer_jit_cache: bool = False
     cuda_arch: str | None = None
     max_jobs: float = 1.0  # <=1: fraction of CPU cores, >1: absolute count
     torch_index: str = "https://download.pytorch.org/whl/cu130"
