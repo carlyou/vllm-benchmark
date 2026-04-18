@@ -14,7 +14,7 @@ server:
 # DGX Spark: unit tests and e2e tp1 for MLA quant fusion.
 
 branches:
-  test--mla-quant-fusion-group-fp8:
+  feat--mla-quant-fusion-group-fp8:
     runs:
       - label: unit_test
         test:
