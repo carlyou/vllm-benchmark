@@ -337,15 +337,21 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
 
     # 6. Optionally install flashinfer-jit-cache (pre-compiled JIT kernels)
     if build.install_flashinfer_jit_cache:
-        # Determine CUDA version from torch_index (e.g. cu130 -> 130)
         import re as _re
         cuda_ver_match = _re.search(r"cu(\d+)", build.torch_index)
         cuda_ver = cuda_ver_match.group(1) if cuda_ver_match else "130"
         fi_index = f"https://flashinfer.ai/whl/cu{cuda_ver}"
-        ctx.log(f"Installing flashinfer-jit-cache (index: {fi_index})...")
+        # Pin jit-cache version to match installed flashinfer-python
+        fi_ver_result = _run(
+            [venv_python, "-c",
+             "import importlib.metadata; "
+             "print(importlib.metadata.version('flashinfer-python'))"],
+            check=False, ctx=ctx)
+        fi_ver = fi_ver_result.stdout.strip() if fi_ver_result.returncode == 0 else ""
+        pkg = f"flashinfer-jit-cache=={fi_ver}" if fi_ver else "flashinfer-jit-cache"
+        ctx.log(f"Installing {pkg} (index: {fi_index})...")
         result = _run(
-            uv_pip + ["flashinfer-jit-cache",
-                       "--extra-index-url", fi_index],
+            uv_pip + [pkg, "--extra-index-url", fi_index],
             check=False, ctx=ctx)
         if result.returncode != 0:
             ctx.log("WARNING: flashinfer-jit-cache install failed, skipping.")
