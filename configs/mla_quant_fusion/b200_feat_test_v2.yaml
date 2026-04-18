@@ -4,6 +4,7 @@ project:
 
 build:
   cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu130
 
 server:
   log_level: debug
