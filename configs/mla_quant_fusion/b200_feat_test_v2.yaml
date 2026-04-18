@@ -10,7 +10,7 @@ server:
   log_level: debug
   clear_caches: true
 
-# 1xB200: unit tests and e2e tp1 on test branch.
+# 2xB200: unit tests, e2e tp1, and e2e tp2 on test branch.
 
 branches:
   test--mla-quant-fusion-group-fp8:
@@ -23,4 +23,9 @@ branches:
       - label: e2e_tp1
         test:
           script: tests/compile/fusions_e2e/test_tp1_quant.py
+          args: "-v -k 'DeepSeek'"
+
+      - label: e2e_tp2
+        test:
+          script: tests/compile/fusions_e2e/test_tp2_ar_rms.py
           args: "-v -k 'DeepSeek'"
