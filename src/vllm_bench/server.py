@@ -195,27 +195,10 @@ class Server:
         return f"http://localhost:{self.server.port}"
 
     def _build_serve_cmd(self) -> list[str]:
-        srv = self.server
-        vllm_bin = str(self.resolved.vllm_bin)
-        cmd = [
-            vllm_bin, "serve", self.config.project.model,
-            "--tensor-parallel-size", str(srv.tp),
-            "--max-model-len", str(srv.max_model_len),
-            "--trust-remote-code",
-            "--port", str(srv.port),
-        ]
-        if srv.gpu_memory_utilization is not None:
-            cmd += ["--gpu-memory-utilization",
-                    str(srv.gpu_memory_utilization)]
-        if srv.enforce_eager:
-            cmd += ["--enforce-eager"]
-        if srv.attention_backend:
-            cmd += ["--attention-backend", srv.attention_backend]
-        if srv.compilation_config:
-            cmd += ["-cc", json.dumps(srv.compilation_config)]
-        if srv.kernel_config:
-            cmd += ["--kernel-config", json.dumps(srv.kernel_config)]
-        return cmd
+        return self.server.build_serve_cmd(
+            model=self.config.project.model,
+            vllm_bin=str(self.resolved.vllm_bin),
+        )
 
     def _start(self) -> None:
         srv = self.server

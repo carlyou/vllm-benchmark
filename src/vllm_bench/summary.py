@@ -112,26 +112,7 @@ def _get_hardware_info(venv_python: Path) -> dict[str, str]:
 
 def _format_server_cmd(config: Config, r: ResolvedRun) -> str:
     """Reconstruct the vllm serve command for display."""
-    srv = r.server
-    parts = []
-    if srv.env:
-        parts += [f"{k}={v}" for k, v in srv.env.items()]
-    parts += [
-        "vllm serve", config.project.model,
-        "--tensor-parallel-size", str(srv.tp),
-        "--max-model-len", str(srv.max_model_len),
-        "--trust-remote-code",
-        "--port", str(srv.port),
-    ]
-    if srv.gpu_memory_utilization is not None:
-        parts += ["--gpu-memory-utilization", str(srv.gpu_memory_utilization)]
-    if srv.enforce_eager:
-        parts += ["--enforce-eager"]
-    if srv.compilation_config:
-        parts += ["-cc", json.dumps(srv.compilation_config)]
-    if srv.kernel_config:
-        parts += ["--kernel-config", json.dumps(srv.kernel_config)]
-    return " ".join(parts)
+    return " ".join(r.server.build_serve_cmd(model=config.project.model))
 
 
 def _format_bench_cmd(config: Config, r: ResolvedRun) -> str:

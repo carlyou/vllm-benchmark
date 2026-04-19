@@ -52,6 +52,31 @@ class ServerConfig:
     env: dict[str, str] | None = None  # extra env vars for server process
     wait_timeout: int = 600  # seconds to wait for server health
 
+    def build_serve_cmd(self, model: str, vllm_bin: str = "vllm") -> list[str]:
+        """Build the vllm serve command list."""
+        import json
+        cmd = []
+        if self.env:
+            cmd += [f"{k}={v}" for k, v in self.env.items()]
+        cmd += [
+            vllm_bin, "serve", model,
+            "--tensor-parallel-size", str(self.tp),
+            "--max-model-len", str(self.max_model_len),
+            "--trust-remote-code",
+            "--port", str(self.port),
+        ]
+        if self.gpu_memory_utilization is not None:
+            cmd += ["--gpu-memory-utilization", str(self.gpu_memory_utilization)]
+        if self.enforce_eager:
+            cmd += ["--enforce-eager"]
+        if self.attention_backend:
+            cmd += ["--attention-backend", self.attention_backend]
+        if self.compilation_config:
+            cmd += ["-cc", json.dumps(self.compilation_config)]
+        if self.kernel_config:
+            cmd += ["--kernel-config", json.dumps(self.kernel_config)]
+        return cmd
+
 
 @dataclass
 class BenchConfig:
