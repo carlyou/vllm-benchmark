@@ -13,6 +13,8 @@ server:
   gpu_memory_utilization: 0.95
   log_level: debug
   wait_timeout: 1800
+  env:
+    VLLM_USE_DEEP_GEMM: "0"
   kernel_config:
     moe_backend: triton
   compilation_config:
