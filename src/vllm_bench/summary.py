@@ -126,6 +126,8 @@ def _format_server_cmd(config: Config, r: ResolvedRun) -> str:
         parts += ["--enforce-eager"]
     if srv.compilation_config:
         parts += ["-cc", json.dumps(srv.compilation_config)]
+    if srv.kernel_config:
+        parts += ["--kernel-config", json.dumps(srv.kernel_config)]
     return " ".join(parts)
 
 
@@ -192,6 +194,9 @@ def format_summary(config: Config,
         lines.append(f"  - {r.label}:")
         lines.append(f"      branch:     {r.branch}"
                      f"{f' @ {r.commit}' if r.commit else ''}")
+        if r.server.env:
+            env_str = " ".join(f"{k}={v}" for k, v in r.server.env.items())
+            lines.append(f"      env:        {env_str}")
         lines.append(f"      server:     $ {_format_server_cmd(config, r)}")
         lines.append(f"      bench:      $ {_format_bench_cmd(config, r)}")
     lines.append("")
@@ -275,6 +280,9 @@ def format_eval_summary(config: Config,
         lines.append(f"  - {r.label}:")
         lines.append(f"      branch:     {r.branch}"
                      f"{f' @ {r.commit}' if r.commit else ''}")
+        if r.server.env:
+            env_str = " ".join(f"{k}={v}" for k, v in r.server.env.items())
+            lines.append(f"      env:        {env_str}")
         lines.append(f"      server:     $ {_format_server_cmd(config, r)}")
         eval_cmd = _format_eval_cmd(config, r)
         if eval_cmd:
