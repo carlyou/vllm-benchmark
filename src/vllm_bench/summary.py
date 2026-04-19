@@ -112,7 +112,7 @@ def _get_hardware_info(venv_python: Path) -> dict[str, str]:
 
 def _format_server_cmd(config: Config, r: ResolvedRun) -> str:
     """Reconstruct the vllm serve command for display."""
-    return " ".join(r.server.build_serve_cmd(model=config.project.model))
+    return r.server.format_serve_cmd(model=config.project.model)
 
 
 def _format_bench_cmd(config: Config, r: ResolvedRun) -> str:

@@ -53,12 +53,13 @@ class ServerConfig:
     wait_timeout: int = 600  # seconds to wait for server health
 
     def build_serve_cmd(self, model: str, vllm_bin: str = "vllm") -> list[str]:
-        """Build the vllm serve command list."""
+        """Build the vllm serve command list.
+
+        Note: env vars are NOT included — they are passed via Popen(env=...)
+        at runtime. Use format_serve_cmd() for display with env prefix.
+        """
         import json
-        cmd = []
-        if self.env:
-            cmd += [f"{k}={v}" for k, v in self.env.items()]
-        cmd += [
+        cmd = [
             vllm_bin, "serve", model,
             "--tensor-parallel-size", str(self.tp),
             "--max-model-len", str(self.max_model_len),
@@ -76,6 +77,14 @@ class ServerConfig:
         if self.kernel_config:
             cmd += ["--kernel-config", json.dumps(self.kernel_config)]
         return cmd
+
+    def format_serve_cmd(self, model: str, vllm_bin: str = "vllm") -> str:
+        """Format the full serve command for display, including env prefix."""
+        parts = []
+        if self.env:
+            parts += [f"{k}={v}" for k, v in self.env.items()]
+        parts += self.build_serve_cmd(model=model, vllm_bin=vllm_bin)
+        return " ".join(parts)
 
 
 @dataclass
