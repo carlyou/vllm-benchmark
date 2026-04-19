@@ -113,7 +113,10 @@ def _get_hardware_info(venv_python: Path) -> dict[str, str]:
 def _format_server_cmd(config: Config, r: ResolvedRun) -> str:
     """Reconstruct the vllm serve command for display."""
     srv = r.server
-    parts = [
+    parts = []
+    if srv.env:
+        parts += [f"{k}={v}" for k, v in srv.env.items()]
+    parts += [
         "vllm serve", config.project.model,
         "--tensor-parallel-size", str(srv.tp),
         "--max-model-len", str(srv.max_model_len),
@@ -194,9 +197,6 @@ def format_summary(config: Config,
         lines.append(f"  - {r.label}:")
         lines.append(f"      branch:     {r.branch}"
                      f"{f' @ {r.commit}' if r.commit else ''}")
-        if r.server.env:
-            env_str = " ".join(f"{k}={v}" for k, v in r.server.env.items())
-            lines.append(f"      env:        {env_str}")
         lines.append(f"      server:     $ {_format_server_cmd(config, r)}")
         lines.append(f"      bench:      $ {_format_bench_cmd(config, r)}")
     lines.append("")
@@ -280,9 +280,6 @@ def format_eval_summary(config: Config,
         lines.append(f"  - {r.label}:")
         lines.append(f"      branch:     {r.branch}"
                      f"{f' @ {r.commit}' if r.commit else ''}")
-        if r.server.env:
-            env_str = " ".join(f"{k}={v}" for k, v in r.server.env.items())
-            lines.append(f"      env:        {env_str}")
         lines.append(f"      server:     $ {_format_server_cmd(config, r)}")
         eval_cmd = _format_eval_cmd(config, r)
         if eval_cmd:
