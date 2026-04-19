@@ -8,7 +8,7 @@ build:
   install_flashinfer_jit_cache: true
 
 server:
-  tp: 8
+  tp: 4
   max_model_len: 4096
   gpu_memory_utilization: 0.95
   log_level: debug
