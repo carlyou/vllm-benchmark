@@ -26,6 +26,9 @@ dependencies = [
     "pyyaml",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=9.0"]
+
 [project.scripts]
 vllm-bench = "vllm_bench.__main__:main"
 
