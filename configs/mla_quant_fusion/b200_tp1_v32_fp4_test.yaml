@@ -1,0 +1,24 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: nvidia/DeepSeek-V3.2-NVFP4
+
+build:
+  cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu130
+  install_flashinfer_jit_cache: true
+
+server:
+  log_level: debug
+  clear_caches: true
+
+# 1xB200: e2e tp1 NVFP4 test for DSv3.2 with sparse MLA.
+# Validates attn_quant_fusion works with FLASHMLA_SPARSE backend.
+# Pytest uses load_format=dummy + n_layers=6 so the 671B model fits.
+
+branches:
+  test--mla-quant-fusion-group-fp8:
+    runs:
+      - label: e2e_tp1_v32_fp4
+        test:
+          script: tests/compile/fusions_e2e/test_tp1_quant.py
+          args: "-v -s -k 'DeepSeek-V3.2 and FLASHMLA_SPARSE and -rms'"
