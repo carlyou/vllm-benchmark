@@ -9,7 +9,6 @@ build:
 
 server:
   log_level: debug
-  clear_caches: true
 
 # 1xB200: e2e tp1 NVFP4 test for DSv3.2 with sparse MLA.
 # Validates attn_quant_fusion works with FLASHMLA_SPARSE backend.
