@@ -16,9 +16,17 @@ server:
 # Pytest uses load_format=dummy + n_layers=6 so the 671B model fits.
 
 branches:
+  main:
+    use_precompiled: true
+    runs:
+      - label: main_v32_fp4
+        test:
+          script: tests/compile/fusions_e2e/test_tp1_quant.py
+          args: "-v -s -k 'DeepSeek-V3.2 and FLASHMLA_SPARSE and -rms'"
+
   test--mla-quant-fusion-group-fp8:
     runs:
-      - label: e2e_tp1_v32_fp4
+      - label: test_v32_fp4
         test:
           script: tests/compile/fusions_e2e/test_tp1_quant.py
           args: "-v -s -k 'DeepSeek-V3.2 and FLASHMLA_SPARSE and -rms'"
