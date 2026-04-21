@@ -5,7 +5,7 @@ project:
 build:
   cuda_arch: "10.0"
   torch_index: https://download.pytorch.org/whl/cu130
-  use_precompiled: false
+  use_precompiled: true
   install_flashinfer_jit_cache: true
 
 server:
