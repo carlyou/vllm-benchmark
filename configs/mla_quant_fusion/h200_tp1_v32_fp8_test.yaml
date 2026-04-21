@@ -4,7 +4,7 @@ project:
 
 build:
   cuda_arch: "9.0"
-  torch_index: https://download.pytorch.org/whl/cu130
+  torch_index: https://download.pytorch.org/whl/cu128
   install_flashinfer_jit_cache: true
 
 server:
