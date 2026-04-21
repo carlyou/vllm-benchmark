@@ -1,0 +1,24 @@
+project:
+  repo: https://github.com/vllm-project/vllm.git
+  model: deepseek-ai/DeepSeek-V2-Lite
+
+build:
+  cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu130
+  use_precompiled: false
+  install_flashinfer_jit_cache: true
+
+server:
+  log_level: debug
+  clear_caches: true
+
+# 1xB200: reproduce CI failure in test_mla_attn_quant_fusion on main
+# after #38093 (auto-revert PR #40423 suspects this commit).
+
+branches:
+  main:
+    runs:
+      - label: mla_attn_quant_fusion_unit
+        test:
+          script: tests/compile/passes/test_mla_attn_quant_fusion.py
+          args: "-v"
