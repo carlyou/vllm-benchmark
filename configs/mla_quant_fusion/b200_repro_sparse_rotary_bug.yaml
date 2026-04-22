@@ -1,0 +1,23 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: nvidia/DeepSeek-V3.2-NVFP4
+
+build:
+  cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu130
+  install_flashinfer_jit_cache: true
+
+server:
+  log_level: debug
+
+# 1xB200: minimal repro of the inductor `replace_by_example` assertion
+# that fires for DSv3.2 sparse MLA + qk_norm_rope_fusion. Branch reverts
+# the conftest workaround so the bug surfaces.
+
+branches:
+  repro--sparse-mla-rotary-bug:
+    runs:
+      - label: repro_v32_fp4_sparse
+        test:
+          script: tests/compile/fusions_e2e/test_tp1_quant.py
+          args: "--tb=short -k 'inductor_partition and FLASHMLA_SPARSE and DeepSeek-V3.2 and not +rms_norm'"
