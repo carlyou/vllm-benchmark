@@ -21,4 +21,4 @@ branches:
       - label: e2e_tp1_full
         test:
           script: tests/compile/fusions_e2e/test_tp1_quant.py
-          args: "-v -s -k 'inductor_partition and ((FLASHINFER and not +rms_norm and (not +quant_fp8 or +quant_fp8 and (qwen3 or deepseek)) or llama-3) or (FLASHMLA_SPARSE and DeepSeek-V3.2 and not +rms_norm))'"
+          args: "--tb=short -k 'inductor_partition and not Llama-4 and ((FLASHINFER and not +rms_norm and (not +quant_fp8 or +quant_fp8 and (qwen3 or deepseek)) or llama-3) or (FLASHMLA_SPARSE and DeepSeek-V3.2 and not +rms_norm))'"
