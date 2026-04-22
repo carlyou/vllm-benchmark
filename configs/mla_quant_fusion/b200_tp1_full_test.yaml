@@ -16,7 +16,7 @@ server:
 # this PR enables).
 
 branches:
-  test--mla-quant-fusion-group-fp8:
+  feat--mla-quant-fusion-group-fp8:
     runs:
       - label: e2e_tp1_full
         test:
