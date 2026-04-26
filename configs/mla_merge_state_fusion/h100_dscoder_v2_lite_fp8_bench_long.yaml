@@ -1,0 +1,57 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
+
+build:
+  cuda_arch: "9.0"
+  torch_index: https://download.pytorch.org/whl/cu129
+  install_flashinfer_jit_cache: true
+
+server:
+  tp: 1
+  max_model_len: 16384
+  gpu_memory_utilization: 0.85
+  log_level: debug
+  wait_timeout: 1200
+  compilation_config:
+    cudagraph_mode: NONE
+    custom_ops: ["+quant_fp8"]
+    pass_config:
+      fuse_attn_quant: true
+
+bench:
+  num_prompts: 500
+  input_len: 12288
+  output_len: 128
+  request_rate: inf
+  warmup_prompts: 3
+  num_warmups: 50
+
+# 1xH100: long-input bench to actually fire the MLA merge-state + static FP8
+# fusion. With max_num_batched_tokens=8192 (vLLM V1 default), each 12288-token
+# prompt is split across 2 scheduler iterations:
+#   iter 1: prefill first 8192 tokens
+#   iter 2: prefill remaining 4096 tokens, with iter-1's output as KV context
+# Iter 2 has chunked_context_metadata != None -> merge-state fusion gate fires.
+#
+# Uses the bench branch carrying instrumentation that prints hit counts to the
+# server log, so we get direct confirmation of activation alongside throughput.
+
+branches:
+  main:
+    runs:
+      - label: main_warmup
+        bench:
+          num_prompts: 20
+          num_warmups: 5
+
+      - label: main_baseline_long
+
+  bench--mla-merge-state-static-fp8-fusion:
+    runs:
+      - label: bench_warmup
+        bench:
+          num_prompts: 20
+          num_warmups: 5
+
+      - label: bench_fuse_on_long
