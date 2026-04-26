@@ -7,6 +7,9 @@ build:
   # H100 vast.ai instance ships with R560 driver (CUDA 12.6); cu130 wheels
   # require R580+. cu129 works via CUDA minor-version compatibility.
   torch_index: https://download.pytorch.org/whl/cu129
+  # Avoid 6+ minutes of FlashInfer FP8 MoE kernel JIT for sm_90a on first run
+  # (DSv2-Lite is FP8 MoE; cutlass backend JITs ~156 kernels).
+  install_flashinfer_jit_cache: true
 
 server:
   tp: 1
