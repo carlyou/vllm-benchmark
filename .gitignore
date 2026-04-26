@@ -2,6 +2,3 @@
 __pycache__/
 *.pyc
 *.egg-info/
-
-logs/
-results/

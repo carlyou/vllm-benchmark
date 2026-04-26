@@ -4,6 +4,9 @@ project:
 
 build:
   cuda_arch: "9.0"
+  # H100 vast.ai instance ships with R560 driver (CUDA 12.6); cu130 wheels
+  # require R580+. cu129 works via CUDA minor-version compatibility.
+  torch_index: https://download.pytorch.org/whl/cu129
 
 server:
   gpu_memory_utilization: 0.85
