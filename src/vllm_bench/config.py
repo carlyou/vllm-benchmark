@@ -248,7 +248,7 @@ def _build_section(cls, raw: dict, section_name: str):
 
 
 _BRANCH_FIELDS = {"build", "server", "bench", "eval", "test", "commit", "runs"}
-_RUN_FIELDS = {"label", "commit", "server", "bench", "eval", "test"}
+_RUN_FIELDS = {"label", "branch", "commit", "server", "bench", "eval", "test"}
 
 
 def _parse_branches(raw_branches: dict) -> tuple[dict[str, BranchConfig],
@@ -280,9 +280,10 @@ def _parse_branches(raw_branches: dict) -> tuple[dict[str, BranchConfig],
                     f"({r.get('label', '?')}): unknown key(s): "
                     f"{', '.join(sorted(run_unknown))!r}")
             try:
+                run_branch = r.get("branch", branch_name)
                 runs.append(RunConfig(
                     label=r["label"],
-                    branch=branch_name,
+                    branch=run_branch,
                     commit=r.get("commit", branch_commit),
                     server=r.get("server") or {},
                     bench=r.get("bench") or {},
