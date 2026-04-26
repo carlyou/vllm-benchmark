@@ -1,0 +1,35 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
+
+build:
+  cuda_arch: "9.0"
+
+server:
+  gpu_memory_utilization: 0.85
+  log_level: debug
+  compilation_config:
+    cudagraph_mode: NONE
+    custom_ops: ["+quant_fp8"]
+    pass_config:
+      fuse_attn_quant: true
+
+# 1xH100: GSM8K parity check for the MLA merge-state + static-FP8 fusion.
+# Both branches enable fuse_attn_quant so the only difference is whether
+# forward_mha writes FP8 directly via merge_attn_states (feat) or does the
+# bf16 round-trip + post-quant (main).
+
+branches:
+  main:
+    runs:
+      - label: main_gsm8k
+        eval:
+          script: tests/evals/gsm8k/gsm8k_eval.py
+          args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
+
+  feat--mla-merge-state-static-fp8-fusion:
+    runs:
+      - label: feat_gsm8k
+        eval:
+          script: tests/evals/gsm8k/gsm8k_eval.py
+          args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
