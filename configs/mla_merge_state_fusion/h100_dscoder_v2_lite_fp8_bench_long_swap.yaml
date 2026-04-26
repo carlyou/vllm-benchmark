@@ -1,0 +1,52 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
+
+build:
+  cuda_arch: "9.0"
+  torch_index: https://download.pytorch.org/whl/cu129
+  install_flashinfer_jit_cache: true
+
+server:
+  tp: 1
+  max_model_len: 16384
+  gpu_memory_utilization: 0.85
+  log_level: debug
+  wait_timeout: 1200
+  compilation_config:
+    cudagraph_mode: NONE
+    custom_ops: ["+quant_fp8"]
+    pass_config:
+      fuse_attn_quant: true
+
+bench:
+  num_prompts: 500
+  input_len: 12288
+  output_len: 128
+  request_rate: inf
+  warmup_prompts: 3
+  num_warmups: 50
+
+# Swap-order long-input bench: bench branch first, then main. Combined with
+# the original (main first, bench second) it disentangles the ~17% 1st-vs-2nd
+# position thermal penalty from the actual fusion delta. Uses the
+# instrumented bench branch so each run also re-confirms gate activation.
+
+branches:
+  bench--mla-merge-state-static-fp8-fusion:
+    runs:
+      - label: bench_warmup_swap
+        bench:
+          num_prompts: 20
+          num_warmups: 5
+
+      - label: bench_fuse_on_long_swap
+
+  main:
+    runs:
+      - label: main_warmup_swap
+        bench:
+          num_prompts: 20
+          num_warmups: 5
+
+      - label: main_baseline_long_swap
