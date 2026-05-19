@@ -291,7 +291,15 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
                 torch_spec = line
                 break
     ctx.log(f"Installing torch ({torch_spec}) + torchvision/torchaudio...")
+    # --reinstall-package: a stale venv may already hold torch of the same
+    # version but a different CUDA tag (e.g. 2.11.0+cu129); uv would treat
+    # `torch==2.11.0` as satisfied and keep the wrong-CUDA build. Force
+    # (re)install from the CUDA-matched index. uv's wheel cache keeps this
+    # cheap when nothing actually changes.
     _run(uv_pip + [torch_spec, "torchvision", "torchaudio",
+                    "--reinstall-package", "torch",
+                    "--reinstall-package", "torchvision",
+                    "--reinstall-package", "torchaudio",
                     "--extra-index-url", build.torch_index], ctx=ctx)
 
     if build.use_precompiled:
