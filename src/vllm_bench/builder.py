@@ -285,8 +285,21 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
                         "--extra-index-url", build.torch_index], ctx=ctx)
 
         # 2. Install build deps (minus torch, already installed above)
-        build_reqs = repo_dir / "requirements" / "build.txt"
-        if build_reqs.exists():
+        # vLLM moved build reqs from requirements/build.txt to
+        # requirements/build/<platform>.txt; support both layouts.
+        build_reqs = next(
+            (
+                p
+                for p in (
+                    repo_dir / "requirements" / "build" / "cuda.txt",
+                    repo_dir / "requirements" / "build.txt",
+                )
+                if p.exists()
+            ),
+            None,
+        )
+        if build_reqs is not None:
+            ctx.log(f"Installing build deps from {build_reqs.name}...")
             lines = []
             for raw in build_reqs.read_text().splitlines():
                 line = raw.split("#")[0].strip()
