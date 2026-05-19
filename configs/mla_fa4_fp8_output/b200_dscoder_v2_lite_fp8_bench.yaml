@@ -48,6 +48,8 @@ branches:
       - label: feat_baseline
 
   main:
+    build:
+      use_precompiled: true
     runs:
       - label: main_warmup
         bench:

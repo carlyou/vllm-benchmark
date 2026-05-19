@@ -39,6 +39,8 @@ server:
 
 branches:
   main:
+    build:
+      use_precompiled: true
     runs:
       - label: main_gsm8k
         eval:
