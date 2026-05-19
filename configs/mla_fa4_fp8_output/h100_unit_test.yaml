@@ -1,0 +1,25 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8  # unused (pytest only)
+
+build:
+  # H100 = SM90. The FA4 fused path is gated to SM100/SM110, so it does NOT
+  # engage here — but test_mla_prefill_quant_output.py mocks device
+  # capability, so it validates the full gating matrix arch-independently.
+  cuda_arch: "9.0"
+  # Precompiled wheel: the unit test is pure-Python (mocks current_platform),
+  # so FA4 kernels need not be built. Editable install still picks up the
+  # test-branch Python changes (supports_quant_output etc.). Fast + fits the
+  # small (61GB) disk.
+  use_precompiled: true
+  # H100 vast.ai images historically need cu129 (driver < R580 for cu130).
+  torch_index: https://download.pytorch.org/whl/cu129
+
+# Unit test for the FA4 fused-FP8 gating + signature contract.
+branches:
+  test--mla-fa4-native-fp8-output:
+    runs:
+      - label: unit_quant_output
+        test:
+          script: tests/v1/attention/test_mla_prefill_quant_output.py
+          args: "-v"
