@@ -261,6 +261,39 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
         env["CMAKE_ARGS"] = cmake_args
         ctx.log(f"Using ccache: {_ccache}")
 
+    # vLLM moved build reqs from requirements/build.txt to
+    # requirements/build/<platform>.txt; support both layouts.
+    build_reqs = next(
+        (
+            p
+            for p in (
+                repo_dir / "requirements" / "build" / "cuda.txt",
+                repo_dir / "requirements" / "build.txt",
+            )
+            if p.exists()
+        ),
+        None,
+    )
+
+    # Resolve vLLM's pinned torch (e.g. "torch==2.11.0") and install it up
+    # front with the CUDA-matched index, for BOTH precompiled and source:
+    #  - source: avoids the post-build torch downgrade that leaves
+    #    _C.abi3.so linked against the wrong torch ("undefined symbol:
+    #    ...torch::headeronly::Tag..." at `import vllm._C`).
+    #  - precompiled: `uv pip install -e .` with unsafe-best-match otherwise
+    #    resolves a mismatched torch CUDA (e.g. cu129 on a cu130 system),
+    #    tripping _check_cuda_version.
+    torch_spec = "torch"
+    if build_reqs is not None:
+        for raw in build_reqs.read_text().splitlines():
+            line = raw.split("#")[0].strip()
+            if line.startswith("torch==") or line.startswith("torch="):
+                torch_spec = line
+                break
+    ctx.log(f"Installing torch ({torch_spec}) + torchvision/torchaudio...")
+    _run(uv_pip + [torch_spec, "torchvision", "torchaudio",
+                    "--extra-index-url", build.torch_index], ctx=ctx)
+
     if build.use_precompiled:
         # Precompiled: single command, deps resolve from PyPI.
         # https://docs.vllm.ai/en/latest/contributing/#developing
@@ -280,41 +313,7 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
         ctx.log(f"Building vllm from source "
                 f"(HEAD={current_state['commit'][:12]})...")
 
-        # vLLM moved build reqs from requirements/build.txt to
-        # requirements/build/<platform>.txt; support both layouts.
-        build_reqs = next(
-            (
-                p
-                for p in (
-                    repo_dir / "requirements" / "build" / "cuda.txt",
-                    repo_dir / "requirements" / "build.txt",
-                )
-                if p.exists()
-            ),
-            None,
-        )
-
-        # Resolve vLLM's pinned torch (e.g. "torch==2.11.0") from the build
-        # reqs. The editable install later resolves vLLM's runtime deps and
-        # would DOWNGRADE an unpinned/newer torch to this pin AFTER the C++
-        # extension was already compiled against the newer torch, producing
-        # an ABI mismatch ("undefined symbol: ...torch::headeronly::Tag..."
-        # at `import vllm._C`). So install the pinned torch up front, before
-        # compiling, so build-time and runtime torch match.
-        torch_spec = "torch"
-        if build_reqs is not None:
-            for raw in build_reqs.read_text().splitlines():
-                line = raw.split("#")[0].strip()
-                if line.startswith("torch==") or line.startswith("torch="):
-                    torch_spec = line
-                    break
-
-        # 1. Install torch (pinned to vLLM's requirement) + vision/audio.
-        ctx.log(f"Installing torch ({torch_spec}) + torchvision/torchaudio...")
-        _run(uv_pip + [torch_spec, "torchvision", "torchaudio",
-                        "--extra-index-url", build.torch_index], ctx=ctx)
-
-        # 2. Install remaining build deps (minus torch, pinned above).
+        # Install remaining build deps (minus torch, pinned above).
         if build_reqs is not None:
             ctx.log(f"Installing build deps from {build_reqs.name}...")
             lines = []
