@@ -12,8 +12,8 @@ build:
   # test-branch Python changes (supports_quant_output etc.). Fast + fits the
   # small (61GB) disk.
   use_precompiled: true
-  # H100 vast.ai images historically need cu129 (driver < R580 for cu130).
-  torch_index: https://download.pytorch.org/whl/cu129
+  # This vast.ai H100 runs the cuda-13.0.2 image -> cu130 (system CUDA 13.x).
+  torch_index: https://download.pytorch.org/whl/cu130
 
 # Unit test for the FA4 fused-FP8 gating + signature contract.
 branches:
