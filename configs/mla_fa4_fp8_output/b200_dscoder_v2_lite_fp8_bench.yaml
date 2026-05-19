@@ -1,0 +1,56 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8
+
+build:
+  cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu130
+  # Source build is mandatory (FA4 fused-FP8 kernels come from
+  # flash-attention#135 via the CMake FetchContent pin). See the eval config.
+  use_precompiled: false
+  install_flashinfer_jit_cache: true
+
+server:
+  tp: 1
+  max_model_len: 16384
+  gpu_memory_utilization: 0.85
+  log_level: debug
+  wait_timeout: 1800
+  compilation_config:
+    cudagraph_mode: NONE
+    custom_ops: ["+quant_fp8"]
+    pass_config:
+      fuse_attn_quant: true
+
+bench:
+  num_prompts: 1000
+  input_len: 4096
+  output_len: 128
+  request_rate: inf
+  warmup_prompts: 3
+  num_warmups: 50
+
+# 1xB200: throughput/latency A/B for FA4 native fused FP8 output.
+# The fused path removes a redundant static-FP8 post-quant kernel over the
+# prefill tokens, so expect a small prefill-side win (TTFT) and parity-or-
+# better elsewhere; the delta is narrow vs run-to-run variance (cf. the
+# sibling merge-state PR). Each branch gets a small warmup run first to prime
+# the GPU / JIT before its measured baseline. Run order is feat-then-main;
+# rerun with `--run` swapped to confirm any delta isn't run-order drift.
+
+branches:
+  test--mla-fa4-native-fp8-output:
+    runs:
+      - label: feat_warmup
+        bench:
+          num_prompts: 20
+          num_warmups: 5
+      - label: feat_baseline
+
+  main:
+    runs:
+      - label: main_warmup
+        bench:
+          num_prompts: 20
+          num_warmups: 5
+      - label: main_baseline
