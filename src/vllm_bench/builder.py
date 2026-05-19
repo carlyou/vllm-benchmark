@@ -280,11 +280,6 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
         ctx.log(f"Building vllm from source "
                 f"(HEAD={current_state['commit'][:12]})...")
 
-        # 1. Install torch + torchvision + torchaudio (CUDA)
-        _run(uv_pip + ["torch", "torchvision", "torchaudio",
-                        "--extra-index-url", build.torch_index], ctx=ctx)
-
-        # 2. Install build deps (minus torch, already installed above)
         # vLLM moved build reqs from requirements/build.txt to
         # requirements/build/<platform>.txt; support both layouts.
         build_reqs = next(
@@ -298,6 +293,28 @@ def build_vllm(repo_dir: Path, build: BuildConfig,
             ),
             None,
         )
+
+        # Resolve vLLM's pinned torch (e.g. "torch==2.11.0") from the build
+        # reqs. The editable install later resolves vLLM's runtime deps and
+        # would DOWNGRADE an unpinned/newer torch to this pin AFTER the C++
+        # extension was already compiled against the newer torch, producing
+        # an ABI mismatch ("undefined symbol: ...torch::headeronly::Tag..."
+        # at `import vllm._C`). So install the pinned torch up front, before
+        # compiling, so build-time and runtime torch match.
+        torch_spec = "torch"
+        if build_reqs is not None:
+            for raw in build_reqs.read_text().splitlines():
+                line = raw.split("#")[0].strip()
+                if line.startswith("torch==") or line.startswith("torch="):
+                    torch_spec = line
+                    break
+
+        # 1. Install torch (pinned to vLLM's requirement) + vision/audio.
+        ctx.log(f"Installing torch ({torch_spec}) + torchvision/torchaudio...")
+        _run(uv_pip + [torch_spec, "torchvision", "torchaudio",
+                        "--extra-index-url", build.torch_index], ctx=ctx)
+
+        # 2. Install remaining build deps (minus torch, pinned above).
         if build_reqs is not None:
             ctx.log(f"Installing build deps from {build_reqs.name}...")
             lines = []
