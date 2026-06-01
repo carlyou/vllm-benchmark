@@ -36,18 +36,12 @@ bench:
   num_warmups: 10
 
 # 1xB200: batch-size-1 / concurrency-1 TTFT A/B for FA4 native fused FP8 output.
-# Run order is feat-then-main; rerun with `--run` swapped to confirm any delta
-# isn't run-order drift.
+# Run order is MAIN-then-feat here (swapped from the original feat-then-main) to
+# check whether the small "feat slower" delta seen earlier is real or just
+# run-order / warmup drift: if main is now the slower one, the delta tracks
+# order, not the branch.
 
 branches:
-  test--mla-fa4-native-fp8-output:
-    runs:
-      - label: feat_warmup
-        bench:
-          num_prompts: 10
-          num_warmups: 5
-      - label: feat_baseline
-
   main:
     build:
       use_precompiled: true
@@ -57,3 +51,11 @@ branches:
           num_prompts: 10
           num_warmups: 5
       - label: main_baseline
+
+  test--mla-fa4-native-fp8-output:
+    runs:
+      - label: feat_warmup
+        bench:
+          num_prompts: 10
+          num_warmups: 5
+      - label: feat_baseline
