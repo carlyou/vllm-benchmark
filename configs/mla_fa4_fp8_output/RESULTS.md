@@ -3,27 +3,47 @@
 Model: `RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8` · GPU: 1×B200 (SM100) ·
 feat branch `test--mla-fa4-native-fp8-output` vs `main`.
 
-Raw logs: `~/.cache/vllm-bench/results/mla_fa4_fp8_output_bs1_swapped/bs1_bench_full.log`
-and `/tmp/microbench_b200.log` (kernel microbench).
+Raw logs: `~/.cache/vllm-bench/results/mla_fa4_fp8_output_bs1_swapped/` —
+`bs1_bench_full.log` (E2E) and `microbench_final.log` (kernel microbench).
 
-## 1. Kernel microbench — fused FP8 vs bf16 + post-quant
+## 1. Kernel microbench (per-`forward_mha`, CUDA-graph timed, 50 repeats)
 
-`benchmarks/attention_benchmarks/benchmark.py --config configs/mla_fa4_fp8_output.yaml`
-(per-`forward_mha`, CUDA-graph timed, 50 repeats, same fa4 kernel). The delta is
-the standalone post-quant kernel the fused write removes.
+### 1a. Fused FP8 write vs bf16 + post-quant, fixed FA4
+
+`benchmark.py --config configs/mla_fa4_fp8_output.yaml`. Same fa4 kernel; the
+delta is the standalone post-quant kernel the fused write removes.
 
 | Prefill spec | post_quant | fused | reduction |
 | ------------ | ---------: | ----: | --------: |
-| q512  |  37 µs |  33 µs | −10.8% |
-| q1k   |  52 µs |  47 µs |  −9.6% |
-| q2k   |  80 µs |  72 µs | −10.0% |
-| q4k   | 146 µs | 130 µs | −11.0% |
-| q8k   | 407 µs | 382 µs |  −6.1% |
-| 2×q4k | 283 µs | 258 µs |  −8.8% |
-| 4×q4k | 575 µs | 521 µs |  −9.4% |
-| 8×q4k | 1142 µs | 1033 µs | −9.5% |
+| q512  |   37 µs |   33 µs | −11% |
+| q1k   |   52 µs |   47 µs |  −9% |
+| q2k   |   80 µs |   73 µs |  −9% |
+| q4k   |  150 µs |  133 µs | −11% |
+| q8k   |  396 µs |  368 µs |  −7% |
+| 2×q4k |  283 µs |  252 µs | −11% |
+| 4×q4k |  569 µs |  506 µs | −11% |
+| 8×q4k | 1132 µs |  996 µs | −12% |
 
-Consistent ~6–11% reduction in the prefill attention-write step.
+Consistent ~7–12% reduction in the prefill attention-write step.
+
+### 1b. Prefill backend sweep, fixed bf16 + post-quant write
+
+`benchmark.py --config configs/mla_fp8_output_backends.yaml`. flashinfer is
+excluded (its prefill scans the model for MLAAttention layers, which the mock
+harness does not provide).
+
+| Prefill spec | fa4 | trtllm | trtllm vs fa4 |
+| ------------ | --: | -----: | ------------: |
+| q512  |   37 µs |   37 µs |  +0.5% |
+| q1k   |   52 µs |   54 µs |  +4.1% |
+| q2k   |   81 µs |   84 µs |  +4.8% |
+| q4k   |  149 µs |  191 µs | +27.9% |
+| q8k   |  395 µs |  460 µs | +16.5% |
+| 2×q4k |  280 µs |  320 µs | +14.5% |
+| 4×q4k |  570 µs |  610 µs |  +7.1% |
+| 8×q4k | 1133 µs | 1183 µs |  +4.5% |
+
+FA4 is fastest at every size; trtllm is 0.5–28% slower.
 
 ## 2. E2E bs1 / concurrency-1 TTFT — delta tracks run order, not branch
 
