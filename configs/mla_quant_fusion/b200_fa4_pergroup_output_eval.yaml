@@ -1,0 +1,30 @@
+project:
+  repo: https://github.com/carlyou/vllm.git
+  model: carlyou/DeepSeek-V2-Lite-FP8-Group
+
+build:
+  cuda_arch: "10.0"
+  torch_index: https://download.pytorch.org/whl/cu130
+
+server:
+  gpu_memory_utilization: 0.8
+  log_level: debug
+
+# 1xB200: GSM8K with the MLA attn-quant fusion ON and the prefill backend forced to
+# FLASH_ATTN (FA4 on B200), so attention writes per-group FP8 output directly and o_proj
+# consumes it as a DeepGEMM block-scaled GEMM. Validates the fused path end-to-end.
+branches:
+  test--fa4-pergroup-fp8-output:
+    runs:
+      - label: fa4_pergroup_fuse_on
+        server:
+          env:
+            VLLM_ATTENTION_BACKEND: FLASH_ATTN
+          compilation_config:
+            cudagraph_mode: NONE
+            custom_ops: ["+quant_fp8"]
+            pass_config:
+              fuse_attn_quant: true
+        eval:
+          script: tests/evals/gsm8k/gsm8k_eval.py
+          args: "--num-shots 5 --num-questions 1319 --max-tokens 256 --temperature 0.0 --seed 42"
