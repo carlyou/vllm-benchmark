@@ -11,8 +11,8 @@ server:
   clear_caches: true
 
 # 1xB200: FA4 fused per-group FP8 output (carlyou/flash-attention pergroup branch).
-# Backend unit/GPU-equivalence tests plus the DeepSeek group-FP8 e2e, which exercises
-# attention -> fused per-group FP8 output -> DeepGEMM o_proj.
+# Backend unit/GPU-equivalence tests + the MLA attn-quant-fusion pass test (which now
+# includes the prefill forward_mha per-group case that exercises the fused output path).
 branches:
   test--fa4-pergroup-fp8-output:
     runs:
@@ -20,7 +20,7 @@ branches:
         test:
           script: tests/v1/attention/test_mla_prefill_quant_output.py
           args: "-v"
-      - label: e2e_tp1
+      - label: mla_attn_quant_fusion
         test:
-          script: tests/compile/fusions_e2e/test_tp1_quant.py
-          args: "-v -k 'DeepSeek'"
+          script: tests/compile/passes/test_mla_attn_quant_fusion.py
+          args: "-v"
